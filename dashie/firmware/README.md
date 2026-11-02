@@ -56,3 +56,36 @@ Replies from the bridge that contain Hebrew are drawn with the Hebrew font and r
 - IMU axes assume: screen facing the driver, device upright (X = right, Y = up, Z = towards the driver).
 - Crash alert is local (screen + beeps). No automatic calls/messages.
 - HTTPS to the bridge skips certificate verification.
+
+## A2DP: voice replies through the car hands-free kit (env `core2_a2dp`)
+
+Core2 only (the CoreS3's ESP32-S3 has no Bluetooth Classic). Build/flash: `pio run -e core2_a2dp -t upload`.
+Library: `pschatzmann/ESP32-A2DP` pinned to tag `v1.8.7` (not in the PlatformIO registry, fetched from git).
+
+**How it works.** For each spoken reply Dashie brings Bluetooth up, connects to the kit as an A2DP *source*,
+streams the ElevenLabs WAV (16 kHz mono -> 44.1 kHz stereo, with gain headroom and 0.3 s of lead-in silence),
+then disconnects and shuts Bluetooth down so the phone can have the kit again. If the kit can't be reached in
+`A2DP_CONNECT_TIMEOUT_MS` (or RAM is short), the reply plays on Dashie's own speaker instead. Text is always shown.
+
+**First-time setup (Deelife NX12/HY62 or any kit):**
+1. Put the kit in **pairing mode first** (long press, as for pairing a phone). Only then does it show up in a scan.
+2. Settings (B until Settings) -> move to **Test kit** with A -> press C (OPT).
+3. If `A2DP_TARGET_NAME` is not found, Dashie shows the audio devices it saw (up to 8): A = next, C = pick, B = back.
+   The pick is saved in Preferences (name + address) and overrides `config.h`; the test then reruns by itself.
+4. Next times Dashie connects to the saved address directly. If that fails once, the following attempt scans again.
+
+Since the kit supports two devices at once, the phone can stay connected. Test kit tells you whether it really
+works with your car: a short two-tone beep should come out of the car speakers while the phone stays connected.
+
+**Config (`src/config.h`):** `A2DP_TARGET_NAME`, `A2DP_CONNECT_TIMEOUT_MS` (6000), `A2DP_SCAN_MS`,
+`A2DP_STREAM_START_TIMEOUT_MS`, `A2DP_MIN_FREE_HEAP`, `A2DP_GAIN_Q15`, `A2DP_RELEASE_BLE` (off).
+
+**Not verified on hardware (be suspicious of all of it):**
+- Compiles, but nothing was run on a Core2: pairing, connection, audio quality and teardown/restart cycles are untested.
+- Wi-Fi + Bluetooth Classic together is tight on internal RAM. `A2DP_MIN_FREE_HEAP` (90000) is a guess; the serial log
+  prints `a2dp: free internal ...` before each session, tune from that.
+- The library only checks "ready to stream" every 10 s; Dashie nudges it once a second after connecting.
+  If audio still starts late, that is where to look.
+- `A2DP_RELEASE_BLE` is off on purpose: the prebuilt Arduino core runs the controller in dual mode, and releasing
+  BLE memory before enabling it may fail.
+- Kits that aren't discoverable outside pairing mode can only be reached through the saved address.
