@@ -64,7 +64,26 @@
 #define IDLE_DIM_MS     20000
 #define BRIDGE_TIMEOUT  12000
 #define RESP_MAX_BYTES  (16 * 1024)    // JSON reply from bridge
+#ifndef AUDIO_MAX_BYTES
 #define AUDIO_MAX_BYTES (600 * 1024)   // max WAV downloaded from audio_url (PSRAM)
+#endif
+
+// ---- Button-only boards (M5StickC Plus2: env plus2 / plus2_a2dp) ----
+// DASHIE_BUTTONS_ONLY : no touch screen; input = BtnA (front), BtnB (side), BtnPWR (side). See README.
+// DASHIE_NO_SPEAKER   : only a buzzer. Replies are spoken through A2DP (plus2_a2dp) or shown as text.
+// DASHIE_ROTATION     : landscape rotation for the 135x240 panel (1 or 3). Flip if the buttons end up on the wrong side.
+#ifndef DASHIE_ROTATION
+#define DASHIE_ROTATION 1
+#endif
+// IMU mounting: which sensor axis (gravity already removed: lx, ly, lz in g) is "lateral" and "forward"
+// in the vehicle. Core2/CoreS3 default (upright, screen to the driver): lateral = lx, forward = -lz.
+// Plus2 (env sets DASHIE_IMU_LAT_EXPR=ly) is a best guess: verify on the G-Force screen and flip the sign if needed.
+#ifndef DASHIE_IMU_LAT_EXPR
+#define DASHIE_IMU_LAT_EXPR (lx)
+#endif
+#ifndef DASHIE_IMU_FWD_EXPR
+#define DASHIE_IMU_FWD_EXPR (-lz)
+#endif
 
 // Driving-event thresholds (in g)
 #define BRAKE_G         0.45f

@@ -1,15 +1,47 @@
-# Dashie firmware (M5Stack Core2 / CoreS3)
+# Dashie firmware (M5Stack Core2 / CoreS3 / StickC Plus2)
 
 ```
-pio run -e core2            # or: pio run -e cores3
+pio run -e core2            # or: cores3, plus2, core2_a2dp, plus2_a2dp
 pio run -e core2 -t upload
 pio device monitor
 ```
 Edit `src/config.h` first (Wi-Fi hotspot of your phone, `BRIDGE_URL`, timezone).
 
+## Boards / environments
+| env | board | notes |
+|---|---|---|
+| `core2` | M5Stack Core2 | 320x240 touch, speaker. Reference board. |
+| `cores3` | M5Stack CoreS3 | like Core2, but **no Bluetooth Classic** (no A2DP) |
+| `core2_a2dp` | Core2 | + A2DP voice to the car kit |
+| `plus2` | M5StickC **PLUS2** | 240x135 (landscape), **buttons only**, buzzer only: replies are text + beeps |
+| `plus2_a2dp` | Plus2 | + A2DP: spoken replies go through the car hands-free kit (the only way to hear them) |
+
+The original M5StickC PLUS (no "2") has no PSRAM and is **not supported**.
+
+### Screen layout (`src/layout.h`)
+Every screen positions its content through one `Layout L`, initialised from `M5.Display.width()/height()`.
+Height >= 200 selects the original 320x240 numbers (Core2/CoreS3 look exactly as before); below that the compact
+240x135 profile is used (smaller face, 16 px hint bar, settings list scrolls 4 rows at a time, rows that would overflow
+switch to the small font, "Whoa!" replaces the hint bar). Adding a new board size = adding a profile in `Layout::init`.
+
+### Buttons (one mapping for all boards, see `handleInput()` in `main.cpp`)
+Everything funnels into `onAction('A'|'B'|'C'|'T'|'S')`.
+
+| action | Core2 / CoreS3 (touch) | Plus2 (buttons) |
+|---|---|---|
+| talk / confirm / cancel crash alert | **A** (or tap the face) | **A** front button (click) |
+| next screen | **B** | **B** side button (click) |
+| option: reset / change value | **C** | **B hold** (reset on Noise/G/Trip); in Settings **B click** = change value |
+| Settings | B cycles to it | **PWR click** toggles Settings (PWR/A-hold = back) |
+| inside Settings: next row | **A** | **A** |
+| crash alert | any button / touch cancels | any button cancels |
+
+Plus2: holding PWR for a few seconds still powers the stick off (hardware behaviour).
+
 ## Files
 | file | what |
 |---|---|
+| `src/layout.h` | screen geometry for 320x240 and 240x135 |
 | `src/main.cpp` | state machine, audio, IMU, screens, networking |
 | `src/trigger.h` | "double shout" voice trigger + Edge Impulse hook (`USE_EI_KWS`) |
 | `src/face.h` | animated face (moods: neutral/happy/worried/angry/confused/listen/think/talk) |
@@ -57,9 +89,10 @@ Replies from the bridge that contain Hebrew are drawn with the Hebrew font and r
 - Crash alert is local (screen + beeps). No automatic calls/messages.
 - HTTPS to the bridge skips certificate verification.
 
-## A2DP: voice replies through the car hands-free kit (env `core2_a2dp`)
+## A2DP: voice replies through the car hands-free kit (envs `core2_a2dp`, `plus2_a2dp`)
 
-Core2 only (the CoreS3's ESP32-S3 has no Bluetooth Classic). Build/flash: `pio run -e core2_a2dp -t upload`.
+Core2 and Plus2 only (the CoreS3's ESP32-S3 has no Bluetooth Classic). Build/flash: `pio run -e core2_a2dp -t upload`
+(or `-e plus2_a2dp`). On Plus2 there is no speaker, so if the kit cannot be reached the reply stays **text only**.
 Library: `pschatzmann/ESP32-A2DP` pinned to tag `v1.8.7` (not in the PlatformIO registry, fetched from git).
 
 **How it works.** For each spoken reply Dashie brings Bluetooth up, connects to the kit as an A2DP *source*,
@@ -69,8 +102,9 @@ then disconnects and shuts Bluetooth down so the phone can have the kit again. I
 
 **First-time setup (Deelife NX12/HY62 or any kit):**
 1. Put the kit in **pairing mode first** (long press, as for pairing a phone). Only then does it show up in a scan.
-2. Settings (B until Settings) -> move to **Test kit** with A -> press C (OPT).
-3. If `A2DP_TARGET_NAME` is not found, Dashie shows the audio devices it saw (up to 8): A = next, C = pick, B = back.
+2. Settings (Core2: B until Settings; Plus2: PWR click) -> move to **Test kit** with A -> Core2: press C (OPT), Plus2: click B.
+3. If `A2DP_TARGET_NAME` is not found, Dashie shows the audio devices it saw (up to 8): Core2: A = next, C = pick, B = back;
+   Plus2: A = next, B = pick, PWR (or A hold) = back.
    The pick is saved in Preferences (name + address) and overrides `config.h`; the test then reruns by itself.
 4. Next times Dashie connects to the saved address directly. If that fails once, the following attempt scans again.
 
@@ -89,3 +123,20 @@ works with your car: a short two-tone beep should come out of the car speakers w
 - `A2DP_RELEASE_BLE` is off on purpose: the prebuilt Arduino core runs the controller in dual mode, and releasing
   BLE memory before enabling it may fail.
 - Kits that aren't discoverable outside pairing mode can only be reached through the saved address.
+
+## Plus2 notes (envs `plus2`, `plus2_a2dp`)
+- **Hardware:** ESP32-PICO-V3-02, 8 MB flash, **2 MB PSRAM**, 135x240 ST7789, PDM mic, MPU6886, buzzer, buttons A/B/PWR.
+  PlatformIO has no board file for it; `board = m5stick-c` is used with the flash size forced to 8 MB (`default_8MB.csv`),
+  and M5Unified/M5GFX detect the Plus2 at run time. `-DBOARD_HAS_PSRAM` comes from the shared flags.
+- **Memory:** internal RAM is the same ~320 KB as on the Core2, so Wi-Fi + A2DP is exactly as tight as there
+  (`A2DP_MIN_FREE_HEAP` check + fallback are shared). What differs is PSRAM: 2 MB instead of 8 MB. A voice request
+  peaks at about 0.25 MB (recording 192 KB + sprite 65 KB + JSON) plus the downloaded reply WAV (<= `AUDIO_MAX_BYTES`,
+  600 KB default; a 160-character reply is ~300 KB). That fits, but if you hit "Out of memory" lower `AUDIO_MAX_BYTES`
+  with `-DAUDIO_MAX_BYTES=\(300*1024\)`. Without A2DP (`plus2`) the reply WAV is not downloaded at all.
+- **Rotation / IMU:** `DASHIE_ROTATION` (default 1) selects landscape; use 3 if the buttons are on the wrong side.
+  The IMU axes for the lying-landscape mounting are a guess (`-DDASHIE_IMU_LAT_EXPR=ly`, forward = -lz): on the G-Force
+  screen the ball must move to the side you steer towards and forward/back with braking. If it is mirrored or swapped,
+  change `DASHIE_IMU_LAT_EXPR` / `DASHIE_IMU_FWD_EXPR` (`(-ly)`, `(lx)`, `(lz)` ...). Crash detection uses |a| and is unaffected.
+- **Hebrew:** same font hook as the other boards; a 20 px font is wide on 240 px, so check long labels.
+- **Not verified on hardware:** everything. The three builds compile and the layout maths is unit-checked on the PC,
+  but fit of text on the 135 px panel, button feel, rotation, IMU axes and A2DP on this board have never run.

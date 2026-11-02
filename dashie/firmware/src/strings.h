@@ -23,6 +23,7 @@ enum StrId : uint8_t {
   S_LOW, S_MED, S_HIGH, S_ON, S_OFF, S_CYAN, S_AMBER, S_GREEN,
   S_LANG_EN, S_LANG_HE, S_LANG_HE_NOFONT,
   S_TESTKIT, S_BT_IDLE, S_BT_CONN, S_BT_OK, S_BT_NF, S_BT_TO, S_BT_MEM, S_BT_FAIL, S_BT_PICK, S_BT_NODEV, S_BACK, S_PICK,
+  S_SET, S_CHANGE, S_PRESSCANCEL, S_BT_IDLE_BTN,   // button-only boards (Plus2)
   S_COUNT
 };
 
@@ -90,6 +91,10 @@ static const StrRow kStrings[S_COUNT] = {
   /* S_BT_NODEV */ {"None found. Pairing mode?", "לא נמצא. מצב צימוד?"},
   /* S_BACK */ {"BACK", "חזור"},
   /* S_PICK */ {"PICK", "בחר"},
+  /* S_SET */ {"SET", "הגדר"},
+  /* S_CHANGE */ {"CHANGE", "שנה"},
+  /* S_PRESSCANCEL */ {"Press A to cancel", "לחץ A לביטול"},
+  /* S_BT_IDLE_BTN */ {"Press B", "לחץ B"},
 };
 
 enum Lang : uint8_t { LANG_EN = 0, LANG_HE = 1 };

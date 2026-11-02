@@ -1,4 +1,4 @@
-// Dashie - in-car voice buddy for M5Stack Core2 / CoreS3 (M5Unified)
+// Dashie - in-car voice buddy for M5Stack Core2 / CoreS3 / StickC Plus2 (M5Unified)
 // See ../../SPEC.md. All UI strings: strings.h (EN/HE). Hebrew font hook: font_he.h.
 
 #include <M5Unified.h>
@@ -16,6 +16,7 @@
 #include "rtl.h"
 #include "trigger.h"
 #include "face.h"
+#include "layout.h"
 #ifdef USE_A2DP_OUT
 #include "a2dp_out.h"
 #endif
@@ -232,7 +233,11 @@ static StrId doRequest() {
     http.end();
   }
   delete cl;
+#if defined(DASHIE_NO_SPEAKER) && !defined(USE_A2DP_OUT)
+  // buzzer-only board without A2DP: nothing could play the audio, so do not download it
+#else
   if (result == S_COUNT && job.audioUrl[0] && !job.orphan) downloadAudio(job.audioUrl);   // failure => text only
+#endif
   return result;
 }
 
@@ -328,10 +333,23 @@ static void bigNum(const char* s, int x, int y, uint16_t col) {
   cv.drawCenterString(s, x, y);
 }
 
-// Label/value row: EN label left + value right, HE mirrored.
+static int textW(const String& logical, int sz) {      // width `say` would draw (same font / RTL logic)
+  bool he = heActive() || rtl::hasHebrew(logical.c_str());
+#ifndef HAVE_HE_FONT
+  he = false;
+#endif
+  setupFont(he, sz);
+  String v = (he && rtl::hasHebrew(logical.c_str())) ? rtlVisual(logical) : logical;
+  return cv.textWidth(v.c_str());
+}
+
+// Label/value row: EN label left + value right, HE mirrored. On the compact screen a row that
+// would overflow is drawn in the small font instead.
 static void row(int y, const String& label, const String& value, uint16_t colL, uint16_t colV) {
-  if (heActive()) { say(label, 310, y, AL_R, 2, colL); say(value, 10, y, AL_L, 2, colV); }
-  else            { say(label, 10, y, AL_L, 2, colL);  say(value, 310, y, AL_R, 2, colV); }
+  int sz = 2, xl = L.rowMargin, xr = L.W - L.rowMargin;
+  if (L.compact && textW(label, 2) + textW(value, 2) + 8 > xr - xl) { sz = 1; y += 4; }
+  if (heActive()) { say(label, xr, y, AL_R, sz, colL); say(value, xl, y, AL_L, sz, colV); }
+  else            { say(label, xl, y, AL_L, sz, colL);  say(value, xr, y, AL_R, sz, colV); }
 }
 
 static String asciiOnly(const char* in) {
@@ -479,7 +497,7 @@ static void startReply(uint32_t now) {
 #endif
   if (!r.length()) r = ui(S_NOREPLY);
   replyRight = replyHeFont;
-  wrapText(r, replyHeFont, 300, 2);
+  wrapText(r, replyHeFont, L.wrapW, 2);
   replySince = now;
 
   // take ownership of downloaded audio and play it
@@ -500,10 +518,14 @@ static void startReply(uint32_t now) {
       onBt = viaBt = a2o::play((const int16_t*)(playBuf + playDataOff), playDataLen / 2, playRate);
 #endif
     if (!onBt) {
+#ifdef DASHIE_NO_SPEAKER
+      heap_caps_free(playBuf); playBuf = nullptr;       // buzzer only: text-only reply
+#else
       audSpk();
       M5.Speaker.setVolume(VOL_LV[cfg.vol]);
       M5.Speaker.playWav(playBuf, playLen);
       playStart = millis();
+#endif
     }
   }
   if (strcmp(job.action, "beep") == 0) beep(1800, 120);
@@ -549,7 +571,7 @@ static void onAction(char which, uint32_t now) {
   if (screen == SC_SET && btPicking) {          // scan list: A next, B back, C pick
     int n = a2o::foundCount();
     if (which == 'A' && n) pickSel = (pickSel + 1) % n;
-    else if (which == 'B') btPicking = false;
+    else if (which == 'B' || which == 'S') btPicking = false;
     else if (which == 'C' && n) {
       a2o::selectFound(pickSel); btPicking = false;
       if (a2o::test()) { testRunning = true; testRes = a2o::Res::NONE; }
@@ -557,7 +579,15 @@ static void onAction(char which, uint32_t now) {
     return;
   }
 #endif
+  if (which == 'S') {                           // button-only boards: PWR toggles Settings, A-hold leaves it
+    screen = (screen == SC_SET) ? SC_FACE : SC_SET; setSel = 0; resetArmedAt = 0;
+    return;
+  }
+#ifdef DASHIE_BUTTONS_ONLY
+  if (which == 'B') { screen = (Screen)((screen + 1) % (SC_COUNT - 1)); return; }   // Settings is reached with PWR
+#else
   if (which == 'B') { screen = (Screen)((screen + 1) % SC_COUNT); return; }
+#endif
   if (which == 'A' || which == 'T') {
     if (screen == SC_SET) { if (which == 'A') setSel = (setSel + 1) % SET_ITEMS; return; }
     if (which == 'T' && screen != SC_FACE) return;
@@ -578,7 +608,21 @@ static void onAction(char which, uint32_t now) {
   }
 }
 
+// One input scheme for all boards: everything funnels into onAction(which):
+//   'A' = primary (talk / next settings row)   'B' = next screen   'C' = option (reset / change value)
+//   'T' = tap on the face (touch only)         'S' = toggle Settings / back (button-only)
+// Touch boards (Core2/CoreS3): BtnA/B/C or the touch zones under the screen.
+// Button-only boards (Plus2): A click = 'A'; B click = 'B' (in Settings: 'C' = change value);
+// B hold = 'C' (reset); PWR click = 'S'; A hold in Settings = 'S' (back).
 static void handleInput(uint32_t now) {
+#ifdef DASHIE_BUTTONS_ONLY
+  const bool inSet = (screen == SC_SET) && st == St::IDLE;
+  if (M5.BtnA.wasHold()) onAction(inSet ? 'S' : 'A', now);
+  else if (M5.BtnA.wasClicked()) onAction('A', now);
+  if (M5.BtnB.wasHold()) onAction('C', now);
+  else if (M5.BtnB.wasClicked()) onAction(inSet ? 'C' : 'B', now);
+  if (M5.BtnPWR.wasClicked()) onAction('S', now);
+#else
   if (M5.BtnA.wasPressed()) onAction('A', now);
   else if (M5.BtnB.wasPressed()) onAction('B', now);
   else if (M5.BtnC.wasPressed()) onAction('C', now);
@@ -587,6 +631,7 @@ static void handleInput(uint32_t now) {
     if (t.y < 200) onAction('T', now);
     else if (t.y < 240) onAction(t.x < 107 ? 'A' : (t.x < 214 ? 'B' : 'C'), now);   // CoreS3 / safety
   }
+#endif
 }
 
 // ----------------------------------------------------------------------------
@@ -652,7 +697,7 @@ static void pollImu(uint32_t now) {
   gX += (ax - gX) * 0.002f; gY += (ay - gY) * 0.002f; gZ += (az - gZ) * 0.002f;   // gravity (tau ~7 s)
   float lx = ax - gX, ly = ay - gY, lz = az - gZ;
   // Assumed mounting: screen facing the driver, upright: X = right, Y = up, Z = towards driver (= backwards).
-  latG = lx; fwdG = -lz;
+  latG = DASHIE_IMU_LAT_EXPR; fwdG = DASHIE_IMU_FWD_EXPR;
   float lin = sqrtf(lx * lx + ly * ly + lz * lz);
   hfEma += (lin - hfEma) * 0.05f;
   if (!driving && hfEma > 0.04f) driving = true; else if (driving && hfEma < 0.025f) driving = false;
@@ -680,12 +725,25 @@ static void pollImu(uint32_t now) {
 // ----------------------------------------------------------------------------
 static const FaceColors& col() { return THEMES[cfg.theme]; }
 
+// Hint-bar labels. Touch boards: A/B/C = three zones. Button-only boards: A = front, B = side, PWR.
+#ifdef DASHIE_BUTTONS_ONLY
+#  define BAR_FACE   S_TALK, S_NEXT, S_SET
+#  define BAR_RESET  S_TALK, S_NEXT, S_SET
+#  define BAR_SET    S_NEXT, S_CHANGE, S_BACK
+#  define BAR_PICK   S_NEXT, S_PICK, S_BACK
+#else
+#  define BAR_FACE   S_TALK, S_NEXT, S_OPT
+#  define BAR_RESET  S_TALK, S_NEXT, S_RESET
+#  define BAR_SET    S_NEXT, S_NEXT, S_OPT
+#  define BAR_PICK   S_NEXT, S_BACK, S_PICK
+#endif
+
 static void bottomBar(StrId a, StrId b, StrId c) {
   const FaceColors& k = col();
-  cv.drawFastHLine(0, 214, 320, k.acc);
-  say(ui(a), 53, 219, AL_C, 2, k.fg);
-  say(ui(b), 160, 219, AL_C, 2, k.fg);
-  say(ui(c), 267, 219, AL_C, 2, k.fg);
+  cv.drawFastHLine(0, L.barY, L.W, k.acc);
+  say(ui(a), L.W / 6, L.barTextY, AL_C, 2, k.fg);
+  say(ui(b), L.W / 2, L.barTextY, AL_C, 2, k.fg);
+  say(ui(c), (L.W * 5 + 3) / 6, L.barTextY, AL_C, 2, k.fg);
 }
 
 static Mood noiseMood() {
@@ -701,42 +759,52 @@ static void clockStr(char* out, size_t n) {
   else snprintf(out, n, "--:--");
 }
 
+static const char* cancelHint() {
+#ifdef DASHIE_BUTTONS_ONLY
+  return ui(S_PRESSCANCEL);
+#else
+  return ui(S_TAPCANCEL);
+#endif
+}
+
 static void renderScreen(uint32_t now) {
   const FaceColors& k = col();
   char b[48];
+  const bool he = heActive();
   switch (screen) {
     case SC_FACE: {
-      Mood m = (now < brakeFlashUntil) ? Mood::WORRIED : noiseMood();
-      drawFace(cv, 160, 100, 1.0f, m, now, k);
+      bool whoa = now < brakeFlashUntil;
+      Mood m = whoa ? Mood::WORRIED : noiseMood();
+      drawFace(cv, L.cx(), L.faceCy, L.faceS, m, now, k);
       clockStr(b, sizeof(b));
-      say(b, 312, 6, AL_R, 2, k.fg, true);
-      say(WiFi.status() == WL_CONNECTED ? "Wi-Fi" : "-", 8, 6, AL_L, 1, WiFi.status() == WL_CONNECTED ? k.acc : k.fg, true);
-      if (cfg.voice) cv.fillCircle(12, 26, 4, k.acc); else cv.drawCircle(12, 26, 4, k.fg);
-      if (now < brakeFlashUntil) say(ui(S_WHOA), 160, 186, AL_C, 2, k.acc);
-      bottomBar(S_TALK, S_NEXT, S_OPT);
+      say(b, L.right(), L.clockY, AL_R, L.clockSz, k.fg, true);
+      say(WiFi.status() == WL_CONNECTED ? "Wi-Fi" : "-", 8, L.wifiY, AL_L, 1, WiFi.status() == WL_CONNECTED ? k.acc : k.fg, true);
+      if (cfg.voice) cv.fillCircle(L.dotX, L.dotY, L.dotR, k.acc); else cv.drawCircle(L.dotX, L.dotY, L.dotR, k.fg);
+      if (whoa) say(ui(S_WHOA), L.cx(), L.whoaY, AL_C, 2, k.acc);
+      if (!(whoa && L.compact)) bottomBar(BAR_FACE);     // compact: "Whoa!" takes the bar's place
       break;
     }
     case SC_NOISE: {
-      say(ui(S_NOISE), heActive() ? 312 : 8, 6, heActive() ? AL_R : AL_L, 2, k.fg);
-      drawFace(cv, 62, 100, 0.42f, noiseMood(), now, k);
+      say(ui(S_NOISE), he ? L.mirror(L.noiseTitleX) : L.noiseTitleX, L.noiseTitleY, he ? AL_R : AL_L, 2, k.fg);
+      drawFace(cv, L.noiseFaceX, L.noiseFaceY, L.noiseFaceS, noiseMood(), now, k);
       snprintf(b, sizeof(b), "%d", (int)(dbSm + 0.5f));
-      bigNum(b, 205, 38, dbSm > 75 ? rgb(255, 80, 60) : (dbSm > 60 ? rgb(255, 200, 0) : k.fg));
-      say("dB", 296, 78, AL_L, 2, k.acc, true);
+      bigNum(b, L.bigNumX, L.bigNumY, dbSm > 75 ? rgb(255, 80, 60) : (dbSm > 60 ? rgb(255, 200, 0) : k.fg));
+      say("dB", L.dbX, L.dbY, AL_L, 2, k.acc, true);
       snprintf(b, sizeof(b), "%s %lus  (%lus)", ui(S_QUIET), (unsigned long)quietStreak, (unsigned long)bestQuiet);
-      say(b, 160, 104, AL_C, 1, k.fg);
-      int base = 205;
-      cv.drawFastHLine(10, base, 300, k.acc);
+      say(b, L.quietX, L.quietY, AL_C, 1, k.fg);
+      int base = L.histBase;
+      cv.drawFastHLine(L.histX, base, 60 * L.histStep, k.acc);
       for (int i = 0; i < 60; i++) {
         float v = hist[(histIdx + i) % 60];
-        int h = constrain((int)((v - 30.0f) * 1.3f), 0, 90);
+        int h = constrain((int)((v - 30.0f) * 1.3f), 0, L.histMaxH);
         uint16_t c2 = v > 75 ? rgb(255, 80, 60) : (v > 60 ? rgb(255, 200, 0) : k.acc);
-        if (v > 1) cv.fillRect(10 + i * 5, base - h, 4, h, c2);
+        if (v > 1) cv.fillRect(L.histX + i * L.histStep, base - h, L.histW, h, c2);
       }
-      bottomBar(S_TALK, S_NEXT, S_RESET);
+      bottomBar(BAR_RESET);
       break;
     }
     case SC_G: {
-      int cx = 160, cy = 108, R = 84;
+      int cx = he ? L.mirror(L.gCx) : L.gCx, cy = L.gCy, R = L.gR;
       cv.drawCircle(cx, cy, R, k.acc); cv.drawCircle(cx, cy, R / 2, k.fg);
       cv.drawFastHLine(cx - R, cy, 2 * R, k.fg); cv.drawFastVLine(cx, cy - R, 2 * R, k.fg);
       for (int i = 0; i < 24; i++) {
@@ -747,49 +815,58 @@ static void renderScreen(uint32_t now) {
       }
       int bx = cx + (int)(constrain(latG, -1.0f, 1.0f) * R), by = cy - (int)(constrain(fwdG, -1.0f, 1.0f) * R);
       uint16_t bc = (now < brakeFlashUntil) ? rgb(255, 60, 40) : k.acc;
-      cv.fillCircle(bx, by, 9, bc);
-      snprintf(b, sizeof(b), "%.2fg", trip.maxG);
-      say(ui(S_MAXG), heActive() ? 312 : 8, 6, heActive() ? AL_R : AL_L, 1, k.fg);
-      say(b, heActive() ? 312 : 8, 18, heActive() ? AL_R : AL_L, 2, k.acc, true);
-      snprintf(b, sizeof(b), "%lu", (unsigned long)trip.brakes);
-      say(ui(S_BRAKES), heActive() ? 8 : 312, 6, heActive() ? AL_L : AL_R, 1, k.fg);
-      say(b, heActive() ? 8 : 312, 18, heActive() ? AL_L : AL_R, 2, k.acc, true);
-      snprintf(b, sizeof(b), "%lu", (unsigned long)trip.turns);
-      say(ui(S_TURNS), heActive() ? 8 : 312, 44, heActive() ? AL_L : AL_R, 1, k.fg);
-      say(b, heActive() ? 8 : 312, 56, heActive() ? AL_L : AL_R, 2, k.acc, true);
-      bottomBar(S_TALK, S_NEXT, S_RESET);
+      cv.fillCircle(bx, by, L.gBall, bc);
+      // three stat blocks (EN positions in L; Hebrew mirrors x and alignment)
+      auto stat = [&](int i, StrId lab, const char* val) {
+        int x = he ? L.mirror(L.gStatX[i]) : L.gStatX[i];
+        Align a = (Align)L.gStatAlign[i];
+        if (he) a = (a == AL_L) ? AL_R : AL_L;
+        say(ui(lab), x, L.gStatLabelY[i], a, 1, k.fg);
+        say(val, x, L.gStatValueY[i], a, 2, k.acc, true);
+      };
+      snprintf(b, sizeof(b), "%.2fg", trip.maxG);        stat(0, S_MAXG, b);
+      snprintf(b, sizeof(b), "%lu", (unsigned long)trip.brakes); stat(1, S_BRAKES, b);
+      snprintf(b, sizeof(b), "%lu", (unsigned long)trip.turns);  stat(2, S_TURNS, b);
+      bottomBar(BAR_RESET);
       break;
     }
     case SC_TRIP: {
       uint32_t s = trip.secs;
+      int y = L.rowY0;
       snprintf(b, sizeof(b), "%02lu:%02lu:%02lu", (unsigned long)(s / 3600), (unsigned long)((s / 60) % 60), (unsigned long)(s % 60));
-      row(14, ui(S_TIME), b, k.fg, k.acc);
+      row(y, ui(S_TIME), b, k.fg, k.acc); y += L.rowPitch;
       snprintf(b, sizeof(b), "%lu", (unsigned long)trip.brakes);
-      row(46, ui(S_BRAKES), b, k.fg, k.acc);
+      row(y, ui(S_BRAKES), b, k.fg, k.acc); y += L.rowPitch;
       snprintf(b, sizeof(b), "%lu", (unsigned long)trip.turns);
-      row(78, ui(S_TURNS), b, k.fg, k.acc);
+      row(y, ui(S_TURNS), b, k.fg, k.acc); y += L.rowPitch;
       snprintf(b, sizeof(b), "%.2f g", trip.maxG);
-      row(110, ui(S_MAXG), b, k.fg, k.acc);
+      row(y, ui(S_MAXG), b, k.fg, k.acc); y += L.rowPitch;
       snprintf(b, sizeof(b), "%d dB", trip.noiseN ? (int)(trip.noiseSum / trip.noiseN + 0.5f) : 0);
-      row(142, ui(S_AVGNOISE), b, k.fg, k.acc);
+      row(y, ui(S_AVGNOISE), b, k.fg, k.acc); y += L.rowPitch;
       snprintf(b, sizeof(b), "%lu s", (unsigned long)bestQuiet);
-      row(174, ui(S_BESTQUIET), b, k.fg, k.acc);
-      if (resetArmedAt && now - resetArmedAt < 3000) say(ui(S_PRESS_AGAIN), 160, 196, AL_C, 1, rgb(255, 120, 80));
-      bottomBar(S_TALK, S_NEXT, S_RESET);
+      row(y, ui(S_BESTQUIET), b, k.fg, k.acc);
+      if (resetArmedAt && now - resetArmedAt < 3000) say(ui(S_PRESS_AGAIN), L.cx(), L.pressY, AL_C, 1, rgb(255, 120, 80));
+      bottomBar(BAR_RESET);
       break;
     }
     case SC_SET: {
 #ifdef USE_A2DP_OUT
       if (btPicking) {                            // scan results: pick the kit
-        say(ui(S_BT_PICK), 160, 6, AL_C, 2, k.acc);
+        say(ui(S_BT_PICK), L.cx(), L.pickTitleY, AL_C, 2, k.acc);
         int n = a2o::foundCount();
-        if (!n) say(ui(S_BT_NODEV), 160, 100, AL_C, 2, k.fg);
-        for (int i = 0; i < n; i++) {
-          int y = 34 + i * 22;
-          if (i == pickSel) cv.drawRoundRect(2, y - 3, 316, 21, 5, k.acc);
+        if (!n) say(ui(S_BT_NODEV), L.cx(), L.H * 5 / 12, AL_C, L.compact ? 1 : 2, k.fg);
+        static int pickFirst = 0;
+        int vis = min(L.pickVisible, 8);
+        if (pickSel < pickFirst) pickFirst = pickSel;
+        if (pickSel >= pickFirst + vis) pickFirst = pickSel - vis + 1;
+        if (pickFirst < 0 || pickFirst >= max(n, 1)) pickFirst = 0;
+        for (int r = 0; r < vis && pickFirst + r < n; r++) {
+          int i = pickFirst + r;
+          int y = L.pickY0 + r * L.pickPitch;
+          if (i == pickSel) cv.drawRoundRect(2, y - 3, L.W - 4, L.pickRectH, 5, k.acc);
           say(a2o::foundName(i), 10, y, AL_L, 1, i == pickSel ? k.acc : k.fg);
         }
-        bottomBar(S_NEXT, S_BACK, S_PICK);
+        bottomBar(BAR_PICK);
         break;
       }
 #endif
@@ -798,10 +875,15 @@ static void renderScreen(uint32_t now) {
         , S_TESTKIT
 #endif
       };
-      const int pitch = SET_ITEMS > 6 ? 28 : 33;
-      for (int i = 0; i < SET_ITEMS; i++) {
-        int y = 10 + i * pitch;
-        if (i == setSel) cv.drawRoundRect(2, y - 5, 316, pitch - 3, 6, k.acc);
+      const int pitch = SET_ITEMS > 6 ? L.setPitch7 : L.setPitch6;
+      const int vis = min(L.setVisible, (int)SET_ITEMS);   // compact: scrolls so the selected row stays visible
+      static int setFirst = 0;
+      if (setSel < setFirst) setFirst = setSel;
+      if (setSel >= setFirst + vis) setFirst = setSel - vis + 1;
+      for (int r = 0; r < vis; r++) {
+        int i = setFirst + r;
+        int y = L.setY0 + r * pitch;
+        if (i == setSel) cv.drawRoundRect(2, y - L.setRectDy, L.W - 4, pitch - 3, 6, k.acc);
         String v;
         switch (i) {
           case 0: v = String(BRIGHT_LV[cfg.bright] * 100 / 255) + "%"; break;
@@ -818,7 +900,12 @@ static void renderScreen(uint32_t now) {
             break;
 #ifdef USE_A2DP_OUT
           case 6: {
-            StrId id = S_BT_IDLE;
+            StrId id =
+#ifdef DASHIE_BUTTONS_ONLY
+                S_BT_IDLE_BTN;
+#else
+                S_BT_IDLE;
+#endif
             if (testRunning) id = S_BT_CONN;
             else switch (testRes) {
               case a2o::Res::OK: id = S_BT_OK; break;
@@ -835,7 +922,7 @@ static void renderScreen(uint32_t now) {
         }
         row(y, ui(labels[i]), v, i == setSel ? k.acc : k.fg, k.fg);
       }
-      bottomBar(S_NEXT, S_NEXT, S_OPT);
+      bottomBar(BAR_SET);
       break;
     }
     default: break;
@@ -847,30 +934,30 @@ static void renderOverlay(uint32_t now) {
   char b[48];
   switch (st) {
     case St::LISTEN:
-      drawFace(cv, 160, 96, 1.0f, Mood::LISTEN, now, k);
-      say(ui(S_LISTENING), 160, 196, AL_C, 2, k.acc);
+      drawFace(cv, L.cx(), L.listenCy, L.faceS, Mood::LISTEN, now, k);
+      say(ui(S_LISTENING), L.cx(), L.statusY, AL_C, 2, k.acc);
       break;
     case St::RECORD: {
-      drawFace(cv, 160, 52, 0.5f, Mood::LISTEN, now, k);
+      drawFace(cv, L.cx(), L.recFaceY, L.recFaceS, Mood::LISTEN, now, k);
       for (int i = 0; i < 64; i++) {
         float v = wave[(waveIdx + i) % 64];
-        int h = 2 + (int)(v * 70);
-        cv.fillRect(8 + i * 5, 150 - h / 2, 3, h, speechSeen ? k.acc : k.fg);
+        int h = 2 + (int)(v * L.waveMaxH);
+        cv.fillRect(L.waveX + i * L.waveStep, L.waveBase - h / 2, L.waveW, h, speechSeen ? k.acc : k.fg);
       }
       snprintf(b, sizeof(b), "%.1fs", recMs / 1000.0f);
-      say(ui(S_RECORDING), 8, 196, AL_L, 2, k.fg);
-      say(b, 312, 196, AL_R, 2, k.acc, true);
+      say(ui(S_RECORDING), L.margin, L.statusY, AL_L, 2, k.fg);
+      say(b, L.right(), L.statusY, AL_R, 2, k.acc, true);
       break;
     }
     case St::THINK:
-      drawFace(cv, 160, 96, 1.0f, Mood::THINK, now, k);
-      say(ui(S_THINKING), 160, 196, AL_C, 2, k.acc);
+      drawFace(cv, L.cx(), L.thinkCy, L.faceS, Mood::THINK, now, k);
+      say(ui(S_THINKING), L.cx(), L.statusY, AL_C, 2, k.acc);
       break;
     case St::REPLY: {
       bool speaking = playBuf && audioSounding();
-      drawFace(cv, 160, 46, 0.5f, speaking ? Mood::TALK : replyMood, now, k, mouthOpen);
-      int lineH = replyHeFont || heActive() ? 24 : 18;
-      int vis = (210 - 100) / lineH;
+      drawFace(cv, L.replyFaceX, L.replyFaceY, L.replyFaceS, speaking ? Mood::TALK : replyMood, now, k, mouthOpen);
+      int lineH = replyHeFont || heActive() ? L.replyLineHe : L.replyLineLatin;
+      int vis = (L.replyBottom - L.replyTextY) / lineH;
       int total = (int)replyLines.size();
       int scroll = 0;
       if (total > vis) scroll = constrain((int)((now - replySince - 1500) / 1800), 0, total - vis);
@@ -879,14 +966,14 @@ static void renderOverlay(uint32_t now) {
         setupFont(he, 2);
         cv.setTextColor(k.fg);
         const String& ln = replyLines[scroll + i];
-        int x = replyRight ? 312 - cv.textWidth(ln.c_str()) : 8;
-        cv.drawString(ln.c_str(), x, 100 + i * lineH);
+        int x = replyRight ? L.right() - cv.textWidth(ln.c_str()) : L.margin;
+        cv.drawString(ln.c_str(), x, L.replyTextY + i * lineH);
       }
       break;
     }
     case St::ERROR:
-      drawFace(cv, 160, 90, 0.8f, Mood::CONFUSED, now, k);
-      say(ui(errId), 160, 190, AL_C, 2, rgb(255, 160, 80));
+      drawFace(cv, L.cx(), L.errCy, L.errS, Mood::CONFUSED, now, k);
+      say(ui(errId), L.cx(), L.errY, AL_C, 2, rgb(255, 160, 80));
       break;
     default: break;
   }
@@ -897,15 +984,15 @@ static void renderCrash(uint32_t now) {
   cv.fillScreen(flash ? rgb(200, 0, 0) : rgb(110, 0, 0));
   uint16_t w = rgb(255, 255, 255);
   int left = CRASH_COUNTDOWN_S - (int)((now - crashStart) / 1000);
-  say(ui(S_IMPACT), 160, 20, AL_C, 2, w);
+  say(ui(S_IMPACT), L.cx(), L.crashY1, AL_C, 2, w);
   if (left > 0) {
-    say(ui(S_AREYOUOK), 160, 56, AL_C, 2, w);
+    say(ui(S_AREYOUOK), L.cx(), L.crashY2, AL_C, 2, w);
     char b[8]; snprintf(b, sizeof(b), "%d", left);
-    bigNum(b, 160, 96, w);
-    say(ui(S_TAPCANCEL), 160, 190, AL_C, 2, w);
+    bigNum(b, L.cx(), L.crashNumY, w);
+    say(cancelHint(), L.cx(), L.crashHintY, AL_C, 2, w);
   } else {
-    say(ui(S_SOS), 160, 100, AL_C, 2, w);
-    say(ui(S_TAPCANCEL), 160, 190, AL_C, 2, w);
+    say(ui(S_SOS), L.cx(), L.crashSosY, AL_C, 2, w);
+    say(cancelHint(), L.cx(), L.crashHintY, AL_C, 2, w);
   }
 }
 
@@ -921,6 +1008,10 @@ static void applyBrightness(uint32_t now) {
 void setup() {
   auto mcfg = M5.config();
   M5.begin(mcfg);
+#ifdef DASHIE_BUTTONS_ONLY
+  M5.Display.setRotation(DASHIE_ROTATION);          // 135x240 portrait panel -> 240x135 landscape
+#endif
+  L.init(M5.Display.width(), M5.Display.height());
   loadPrefs();
   M5.Display.setBrightness(BRIGHT_LV[cfg.bright]);
 
@@ -973,12 +1064,14 @@ void loop() {
 #ifdef USE_A2DP_OUT
       if (viaBt && !a2o::busy()) {                 // A2DP session ended
         viaBt = false;
+#ifndef DASHIE_NO_SPEAKER
         if (a2o::result() != a2o::Res::OK && playBuf) {   // kit not reachable: use the internal speaker
           audSpk();
           M5.Speaker.setVolume(VOL_LV[cfg.vol]);
           M5.Speaker.playWav(playBuf, playLen);
           playStart = now;
         }
+#endif
       }
 #endif
       bool speaking = playBuf && audioActive();
