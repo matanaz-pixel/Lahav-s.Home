@@ -28,6 +28,11 @@ from shift import bp as shift_bp  # noqa: E402
 
 app.register_blueprint(shift_bp)
 
+# תיאום בין מכשיר הרכב למכשיר הכיס: hub.py
+from hub import bp as hub_bp, handle_voice_intent  # noqa: E402
+
+app.register_blueprint(hub_bp)
+
 EL_KEY = os.environ.get("ELEVENLABS_API_KEY")
 AN_KEY = os.environ.get("ANTHROPIC_API_KEY")
 MODEL = os.environ.get("DASHIE_MODEL", "claude-haiku-5-5")
@@ -127,7 +132,12 @@ def voice():
         text = transcribe(wav)
         if not text:
             return jsonify(text="", reply="Didn't catch that", action="face:confused")
-        reply = llm(text) or builtin(text)
+        # פקודות Hub ("איפה הכיס שלי", "תקריא את הסיכום") מטופלות לפני ה-LLM
+        intent = handle_voice_intent(text, request.headers.get("X-Device-Id"))
+        if intent:
+            reply, action = intent["reply"], intent["action"]
+        else:
+            reply, action = llm(text) or builtin(text), "face:happy"
         audio_url = None
         try:
             wav = tts_wav(reply)
@@ -135,7 +145,7 @@ def voice():
                 audio_url = f"{request.host_url}audio/{store_audio(wav)}.wav"
         except requests.RequestException:
             pass  # בלי דיבור, עדיין מציגים טקסט
-        return jsonify(text=text, reply=reply, action="face:happy", audio_url=audio_url)
+        return jsonify(text=text, reply=reply, action=action, audio_url=audio_url)
     except requests.RequestException as e:
         return jsonify(text="", reply="Bridge error", action="face:confused", error=str(e)), 200
 

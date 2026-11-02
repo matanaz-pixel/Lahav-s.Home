@@ -4,3 +4,5 @@ profile/samples/
 __pycache__/
 *.pyc
 .pytest_cache/
+hub_state.json
+hub_state.json.lock

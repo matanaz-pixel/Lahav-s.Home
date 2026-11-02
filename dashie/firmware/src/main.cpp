@@ -108,6 +108,7 @@ static Mood replyMood = Mood::HAPPY;
 static std::vector<String> replyLines;
 static bool replyHeFont = false; static bool replyRight = false;
 static uint32_t replySince = 0;
+static uint32_t thinkTimeoutMs = 20000;          // THINK gives up after this long (shift summary: longer)
 static uint32_t replyHoldMs = 8000;              // how long REPLY stays after the audio ended (long summaries: more)
 static String shiftReplyText;                    // set by shift mode: text to show instead of job.reply
 
@@ -169,9 +170,7 @@ static bool fetchWav(const char* urlIn, uint8_t** outBuf, size_t* outLen) {
   http.setTimeout(8000);
   bool ok = false;
   uint8_t* buf = nullptr;
-  bool began = http.begin(*cl, url);
-  if (began && strlen(SHIFT_BRIDGE_TOKEN)) http.addHeader("Authorization", String("Bearer ") + SHIFT_BRIDGE_TOKEN);
-  if (began && http.GET() == 200) {
+  if (http.begin(*cl, url) && http.GET() == 200) {
     int len = http.getSize();
     if (len <= (int)AUDIO_MAX_BYTES && len != 0) {
       size_t cap = len > 0 ? (size_t)len : (size_t)AUDIO_MAX_BYTES;
@@ -198,6 +197,38 @@ static bool fetchWav(const char* urlIn, uint8_t** outBuf, size_t* outLen) {
 }
 
 static bool downloadAudio(const char* urlIn) { return fetchWav(urlIn, &job.audio, &job.audioLen); }
+
+// Shift summary: the bridge speaks it as several WAV chunks (audio_urls). Merge them into ONE 16-bit mono buffer so the
+// A2DP kit is connected only once. Chunks that do not fit SHIFT_AUDIO_MAX_BYTES (or fail to download) are left out.
+static bool fetchMerged(const std::vector<String>& urls, uint8_t** outBuf, size_t* outLen) {
+  const size_t cap = SHIFT_AUDIO_MAX_BYTES;
+  uint8_t* m = (uint8_t*)heap_caps_malloc(cap, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  if (!m) return false;
+  size_t pos = 44; uint32_t rate = 0;
+  for (const String& u : urls) {
+    uint8_t* b = nullptr; size_t n = 0;
+    if (!fetchWav(u.c_str(), &b, &n)) break;                       // keep what we have
+    uint16_t ch = 0, bits = 0; uint32_t sr = 0;
+    memcpy(&ch, b + 22, 2); memcpy(&sr, b + 24, 4); memcpy(&bits, b + 34, 2);
+    size_t off = 44, dl = n > 44 ? n - 44 : 0;
+    for (size_t i = 12; i + 8 < n && i < 200; i++) {
+      if (memcmp(b + i, "data", 4) == 0) { uint32_t d; memcpy(&d, b + i + 4, 4); off = i + 8; dl = min<size_t>(d, n - off); break; }
+    }
+    bool fits = ch == 1 && bits == 16 && sr >= 8000 && sr <= 48000 && (rate == 0 || sr == rate) && pos + dl <= cap;
+    if (fits) { memcpy(m + pos, b + off, dl); pos += dl; rate = sr; }
+    heap_caps_free(b);
+    if (!fits) break;
+  }
+  if (pos <= 44) { heap_caps_free(m); return false; }
+  uint32_t dataBytes = (uint32_t)(pos - 44), riff = dataBytes + 36, byteRate = rate * 2, fmtLen = 16;
+  uint16_t fmt = 1, ch1 = 1, align = 2, bits16 = 16;
+  memcpy(m, "RIFF", 4); memcpy(m + 4, &riff, 4); memcpy(m + 8, "WAVEfmt ", 8);
+  memcpy(m + 16, &fmtLen, 4); memcpy(m + 20, &fmt, 2); memcpy(m + 22, &ch1, 2);
+  memcpy(m + 24, &rate, 4); memcpy(m + 28, &byteRate, 4); memcpy(m + 32, &align, 2);
+  memcpy(m + 34, &bits16, 2); memcpy(m + 36, "data", 4); memcpy(m + 40, &dataBytes, 4);
+  *outBuf = m; *outLen = pos;
+  return true;
+}
 
 static StrId doRequest() {
   if (strlen(BRIDGE_URL) == 0) return S_ERR_NOBRIDGE;
@@ -492,6 +523,7 @@ static void startNet(uint32_t now) {
   job.wav = recBuf; job.wavLen = 44 + recN * 2; recBuf = nullptr; recN = 0;
   job.orphan = false; job.audio = nullptr; job.audioLen = 0;
   job.text[0] = job.reply[0] = job.action[0] = job.audioUrl[0] = 0;
+  thinkTimeoutMs = 20000;
   job.status = 1;
   xTaskCreatePinnedToCore(netTask, "net", 20480, nullptr, 1, nullptr, 0);
   setSt(St::THINK, now);
@@ -579,8 +611,11 @@ static uint32_t swaitSince = 0, confirmSince = 0;
 static bool haveVib = false, warnedWrite = false, warnedSum = false;
 static String hapSeq; static uint8_t hapIdx = 0; static uint32_t hapNext = 0, vibOff = 0;
 static int battPct = -1; static uint32_t lastBattPoll = 0, lastWarn = 0;
+#if SHIFT_SPOKEN_QUESTIONS
 static volatile uint8_t qState = 0;              // question audio: 0 none, 1 fetching, 2 ready, 3 failed
 static uint8_t* qBuf = nullptr; static size_t qLen = 0; static char qUrl[200]; static int qFor = -1;
+#endif
+static std::vector<String> sumUrls;              // spoken summary chunks (audio_urls) of the summary being fetched
 
 static bool shiftPocket(uint32_t now) {
   return shift::active() && st != St::CRASH && now - lastActivity > SHIFT_POCKET_MS;
@@ -617,7 +652,7 @@ static void noteStart(uint32_t now, St ret) {
   if (playBuf) stopPlayback();
   if (aud != Aud::MIC) audMic();
   haptic("s");
-  if (!shift::noteBegin()) { haptic("lll"); toError(S_ERR_NOSTORE, now); return; }
+  if (!shift::noteBegin(ret == St::SQ && sqFollow)) { haptic("lll"); toError(S_ERR_NOSTORE, now); return; }   // follow-up answers carry X-Kind: answer
   noteReturn = ret;
   micGuardUntil = millis() + 300;                // skip the vibration / beep noise at the start of the note
   memset(wave, 0, sizeof(wave));
@@ -636,12 +671,14 @@ static void noteStop(uint32_t now, bool autoStop) {
   else setSt(St::IDLE, now);
 }
 
+#if SHIFT_SPOKEN_QUESTIONS
 static void qTask(void*) {
   uint8_t* b = nullptr; size_t n = 0;
   bool ok = fetchWav(qUrl, &b, &n);
   if (ok) { qBuf = b; qLen = n; qState = 2; } else qState = 3;
   vTaskDelete(nullptr);
 }
+#endif
 
 static void sqShow(uint32_t now) {
   shift::setLang(g_lang);
@@ -651,10 +688,13 @@ static void sqShow(uint32_t now) {
   replyHeFont = he; replyRight = he;
   wrapText(t, he, L.wrapW, 2);
   setSt(St::SQ, now);
+#if SHIFT_SPOKEN_QUESTIONS
   if (!sqFollow && qState == 0 && shift::questionUrl(sqIdx + 1, qUrl, sizeof(qUrl))) {   // best effort: spoken question
     qFor = sqIdx; qState = 1;
     xTaskCreatePinnedToCore(qTask, "qfetch", 12288, nullptr, 1, nullptr, 0);
   }
+#endif
+  haptic("s");                                      // new question (the bridge has no audio for it)
 }
 
 static void swaitStart(uint32_t now) {
@@ -676,28 +716,35 @@ static void startQuestions(uint32_t now) {
   sqShow(now);
 }
 
-static void startSummary(const String& text, const String& url, uint32_t now) {
+static void startSummary(const String& text, const std::vector<String>& urls, uint32_t now) {
   if (job.status != 0) { toError(S_ERR_BUSY, now); return; }
   shiftReplyText = text.length() ? text : String(ui(S_NOREPLY));
   job.text[0] = job.reply[0] = 0; strlcpy(job.action, "face:happy", sizeof(job.action));
-  strlcpy(job.audioUrl, url.c_str(), sizeof(job.audioUrl));
+  job.audioUrl[0] = 0;
   job.orphan = false; job.audio = nullptr; job.audioLen = 0;
+  sumUrls = urls;
+  thinkTimeoutMs = 70000;                           // up to ~8 chunks to download
 #if defined(DASHIE_NO_SPEAKER) && !defined(USE_A2DP_OUT)
   job.status = 2;                                   // nothing could play the audio: text only
 #else
-  if (job.audioUrl[0]) {
+  if (!sumUrls.empty()) {
     job.status = 1;
-    xTaskCreatePinnedToCore([](void*) { downloadAudio(job.audioUrl); job.status = 2; vTaskDelete(nullptr); },
-                            "sumfetch", 20480, nullptr, 1, nullptr, 0);
+    xTaskCreatePinnedToCore([](void*) {
+      uint8_t* b = nullptr; size_t n = 0;
+      if (fetchMerged(sumUrls, &b, &n)) { job.audio = b; job.audioLen = n; }   // failure => text only
+      if (job.orphan) { if (job.audio) { heap_caps_free(job.audio); job.audio = nullptr; } job.status = 0; }
+      else job.status = 2;
+      vTaskDelete(nullptr);
+    }, "sumfetch", 20480, nullptr, 1, nullptr, 0);
   } else job.status = 2;
 #endif
   setSt(St::THINK, now);
 }
 
 static void startReadLast(uint32_t now) {
-  String id, spoken, url;
-  if (!shift::lastSummary(id, spoken, url)) { toInfo(S_NO_SUMMARY, now); return; }
-  startSummary(spoken, url, now);
+  String id, spoken; std::vector<String> urls;
+  if (!shift::lastSummary(id, spoken, urls)) { toInfo(S_NO_SUMMARY, now); return; }
+  startSummary(spoken, urls, now);
 }
 
 // Returns true when the key was consumed by shift mode.
@@ -772,12 +819,14 @@ static void shiftLoop(uint32_t now) {
     case St::SQ:
       if (sqMode == SqMode::CONFIRM && now - confirmSince > 6000) setSt(St::IDLE, now);
       else if (sqMode == SqMode::QUESTIONS) {
+#if SHIFT_SPOKEN_QUESTIONS
         if (qState == 2) {
           qState = 0;
           if (qFor == sqIdx && !playBuf && !shift::recording()) startPlayback(qBuf, qLen);
           else { heap_caps_free(qBuf); }
           qBuf = nullptr;
         } else if (qState == 3) qState = 0;
+#endif
         if (playBuf && !audioActive()) { stopPlayback(); audMic(); }
         if (now - lastActivity > 180000) { if (playBuf) { stopPlayback(); audMic(); } setSt(St::IDLE, now); }
       }
@@ -786,7 +835,7 @@ static void shiftLoop(uint32_t now) {
       shift::FinState fs = shift::finishState();
       if (fs == shift::FS_DONE || fs == shift::FS_NEED || fs == shift::FS_ERR) {
         shift::Result r; shift::takeResult(r);
-        if (fs == shift::FS_DONE) startSummary(r.spoken.length() ? r.spoken : r.summary.substring(0, 600), r.audioUrl, now);
+        if (fs == shift::FS_DONE) startSummary(r.spoken.length() ? r.spoken : r.summary.substring(0, 600), r.audioUrls, now);
         else if (fs == shift::FS_NEED) { sqQ = r.questions; sqIdx = 0; sqFollow = true; haptic("ss"); sqShow(now); }
         else { shift::finishDetach(); toError(S_ERR_BRIDGE, now); }
       } else if (now - swaitSince > SHIFT_FINISH_WAIT_MS) {
@@ -1454,6 +1503,9 @@ void loop() {
 #if SHIFT_ENABLED
   shiftLoop(now);
 #endif
+  // Extension point for a future "hub" module (bridge heartbeat/poll + remote commands): add `hub::loop(now);` here.
+  // Commands would map onto existing actions: startReadLast(now) (read summary), haptic("...") (vibrate).
+  // Shared bridge plumbing (base URL, token, https client) is in bridge_net.h.
 
   const int16_t* f = nullptr;
   bool got = pollMic(&f);
@@ -1466,7 +1518,7 @@ void loop() {
     case St::THINK:
       if (job.status == 2) startReply(now);
       else if (job.status == 3) { StrId e = job.err; job.status = 0; toError(e, now); }
-      else if (now - stSince > 20000) { job.orphan = true; toError(S_ERR_BRIDGE, now); }
+      else if (now - stSince > thinkTimeoutMs) { job.orphan = true; toError(S_ERR_BRIDGE, now); }
       break;
     case St::REPLY: {
 #ifdef USE_A2DP_OUT

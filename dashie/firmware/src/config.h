@@ -98,9 +98,13 @@
 #ifndef SHIFT_ENABLED
 #define SHIFT_ENABLED 1
 #endif
-// Bearer token sent to the bridge (must equal BRIDGE_TOKEN on the server). Empty = no Authorization header.
-#ifndef SHIFT_BRIDGE_TOKEN
-#define SHIFT_BRIDGE_TOKEN ""
+// Bearer token sent to the bridge on every /shift/* call (must equal BRIDGE_TOKEN on the server; empty = none).
+// Generic name: later bridge features (hub) use the same token.
+#ifndef BRIDGE_TOKEN
+#define BRIDGE_TOKEN ""
+#endif
+#ifndef SHIFT_BRIDGE_TOKEN                 // kept for older configs
+#define SHIFT_BRIDGE_TOKEN BRIDGE_TOKEN
 #endif
 // Bridge origin for /shift/* (e.g. "http://192.168.43.10:8787"). Empty = derived from BRIDGE_URL.
 #ifndef SHIFT_BRIDGE_BASE
@@ -118,8 +122,28 @@
 #ifndef SHIFT_LOW_BATT_PCT
 #define SHIFT_LOW_BATT_PCT 20
 #endif
-#ifndef SHIFT_FINISH_WAIT_MS               // end of shift: how long the UI waits for the summary before detaching
-#define SHIFT_FINISH_WAIT_MS 60000
+#ifndef SHIFT_FINISH_WAIT_MS               // end of shift: how long the UI waits for the summary before detaching.
+#define SHIFT_FINISH_WAIT_MS 130000        // The bridge needs up to ~90 s (LLM + TTS + e-mail): keep this above that.
+#endif
+#ifndef SHIFT_FINISH_HTTP_MS               // HTTP timeout of POST /shift/finish. HTTPClient stores it in a uint16_t (max 65535 ms),
+#define SHIFT_FINISH_HTTP_MS 65000         // so a slower bridge answer is handled by re-sending the request (see shift.cpp)
+#endif
+#if SHIFT_FINISH_HTTP_MS > 65535
+#error "SHIFT_FINISH_HTTP_MS must be <= 65535 (HTTPClient::setTimeout takes uint16_t)"
+#endif
+// The spoken summary arrives as several WAV chunks (audio_urls, ~13 s each). They are merged into ONE buffer so
+// the A2DP kit connects once. Budget in PSRAM; chunks beyond it are not spoken (the text is still shown).
+#ifndef SHIFT_AUDIO_MAX_BYTES
+#ifdef DASHIE_BUTTONS_ONLY
+#define SHIFT_AUDIO_MAX_BYTES (1000 * 1024)   // Plus2: 2 MB PSRAM (~30 s)
+#else
+#define SHIFT_AUDIO_MAX_BYTES (2500 * 1024)   // Core2 / CoreS3: 8 MB PSRAM (~75 s)
+#endif
+#endif
+// 1 = read the 4 wrap-up questions aloud from GET <base>/shift/question/<n>.wav?lang=he|en. The current bridge has
+// no such endpoint, so this is off: the questions are shown on screen with a vibration.
+#ifndef SHIFT_SPOKEN_QUESTIONS
+#define SHIFT_SPOKEN_QUESTIONS 0
 #endif
 // Plus2 has no SD slot: notes are stored in LittleFS (custom partition table, see platformio.ini) at 8 kHz.
 // Core2 / CoreS3 store 16 kHz notes on the SD card (LittleFS fallback when no card is inserted).

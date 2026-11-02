@@ -3,6 +3,7 @@
 #if SHIFT_ENABLED
 
 #include "shift.h"
+#include "bridge_net.h"
 #include <M5Unified.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -101,26 +102,9 @@ static void clearShiftState() {
   persistShift();
 }
 
-static String baseUrl() {
-  String b = SHIFT_BRIDGE_BASE;
-  if (!b.length()) {
-    b = BRIDGE_URL;
-    int p = b.indexOf("://");
-    int e = (p >= 0) ? b.indexOf('/', p + 3) : -1;
-    if (e > 0) b = b.substring(0, e);
-  }
-  while (b.endsWith("/")) b.remove(b.length() - 1);
-  return b;
-}
-
-static WiFiClient* newClient(const String& url) {
-  if (url.startsWith("https")) { auto* c = new WiFiClientSecure(); c->setInsecure(); return c; }
-  return new WiFiClient();
-}
-
-static void addAuth(HTTPClient& h) {
-  if (strlen(SHIFT_BRIDGE_TOKEN)) h.addHeader("Authorization", String("Bearer ") + SHIFT_BRIDGE_TOKEN);
-}
+static String baseUrl() { return bridge::base(); }
+static WiFiClient* newClient(const String& u) { return bridge::newClient(u); }
+static void addAuth(HTTPClient& h) { bridge::addAuth(h); }
 
 static void dirPath(char* out, size_t n) { snprintf(out, n, "/shift/%s", sid); }
 
@@ -156,12 +140,13 @@ static bool ensureStorage() {
   return true;
 }
 
-// Parses "n0007_1730000000.wav"; returns false for other names.
-static bool parseNote(const char* name, bool tmp, uint16_t* seq, uint32_t* ep) {
-  unsigned s = 0; unsigned long e = 0; char ext[8] = {0};
-  if (sscanf(name, "n%u_%lu.%7s", &s, &e, ext) != 3) return false;
-  if (strcmp(ext, tmp ? "tmp" : "wav") != 0) return false;
+// Parses "n0007_1730000000.wav" (note) / "a0008_...wav" (answer to a follow-up question); false for other names.
+static bool parseNote(const char* name, bool tmp, uint16_t* seq, uint32_t* ep, bool* answer = nullptr) {
+  char kind = 0; unsigned s = 0; unsigned long e = 0; char ext[8] = {0};
+  if (sscanf(name, "%c%u_%lu.%7s", &kind, &s, &e, ext) != 4) return false;
+  if ((kind != 'n' && kind != 'a') || strcmp(ext, tmp ? "tmp" : "wav") != 0) return false;
   *seq = (uint16_t)s; *ep = (uint32_t)e;
+  if (answer) *answer = (kind == 'a');
   return true;
 }
 
@@ -175,25 +160,25 @@ static void wavHeader(uint8_t* b, uint32_t dataBytes, uint32_t rate) {
 }
 
 // Finds the oldest queued note. Returns false when the queue is empty.
-static bool oldestNote(char* path, size_t cap, uint16_t* seq, uint32_t* ep) {
+static bool oldestNote(char* path, size_t cap, uint16_t* seq, uint32_t* ep, bool* answer = nullptr) {
   char d[48]; dirPath(d, sizeof(d));
   busLock();
   File dir = gfs->open(d);
-  bool found = false; uint16_t bestSeq = 0xFFFF; uint32_t bestEp = 0; char bestName[48] = {0};
+  bool found = false, bestAns = false; uint16_t bestSeq = 0xFFFF; uint32_t bestEp = 0; char bestName[48] = {0};
   uint16_t cnt = 0;
   if (dir && dir.isDirectory()) {
     for (File f = dir.openNextFile(); f; f = dir.openNextFile()) {
-      uint16_t s; uint32_t e;
-      if (!f.isDirectory() && parseNote(f.name(), false, &s, &e)) {
+      uint16_t s; uint32_t e; bool a;
+      if (!f.isDirectory() && parseNote(f.name(), false, &s, &e, &a)) {
         cnt++;
-        if (s < bestSeq) { bestSeq = s; bestEp = e; strlcpy(bestName, f.name(), sizeof(bestName)); found = true; }
+        if (s < bestSeq) { bestSeq = s; bestEp = e; bestAns = a; strlcpy(bestName, f.name(), sizeof(bestName)); found = true; }
       }
     }
   }
   if (dir) dir.close();
   busUnlock();
   pendingN = cnt;
-  if (found) { snprintf(path, cap, "%s/%s", d, bestName); *seq = bestSeq; *ep = bestEp; }
+  if (found) { snprintf(path, cap, "%s/%s", d, bestName); *seq = bestSeq; *ep = bestEp; if (answer) *answer = bestAns; }
   return found;
 }
 
@@ -283,8 +268,9 @@ static bool postStart() {
   int code = -1;
   if (http.begin(*cl, url)) {
     http.addHeader("Content-Type", "application/json"); addAuth(http);
-    char body[120]; snprintf(body, sizeof(body), "{\"shift_id\":\"%s\",\"started_at\":%lu}", sid, (unsigned long)t0);
-    code = http.POST((uint8_t*)body, strlen(body));
+    String iso = bridge::isoLocal(t0);
+    String body = String("{\"shift_id\":\"") + sid + "\"" + (iso.length() ? String(",\"started_at\":\"") + iso + "\"" : String("")) + "}";
+    code = http.POST((uint8_t*)body.c_str(), body.length());
     http.end();
   }
   delete cl;
@@ -292,10 +278,11 @@ static bool postStart() {
   return code >= 200 && code < 300;
 }
 
-static bool uploadNote(const char* path, uint16_t seq, uint32_t ep) {
+// 1 = acknowledged (file deleted), 0 = failed (retry later), -1 = the bridge rejected the file for good.
+static int uploadNote(const char* path, uint16_t seq, uint32_t ep, bool answer) {
   String url = baseUrl() + "/shift/note";
   busLock(); File f = gfs->open(path, "r"); busUnlock();
-  if (!f) return false;
+  if (!f) return 0;
   size_t sz = f.size();
   WiFiClient* cl = newClient(url);
   HTTPClient http; http.setTimeout(20000); http.setConnectTimeout(6000); http.useHTTP10(true);
@@ -304,7 +291,9 @@ static bool uploadNote(const char* path, uint16_t seq, uint32_t ep) {
     http.addHeader("Content-Type", "audio/wav"); addAuth(http);
     http.addHeader("X-Shift-Id", sid);
     http.addHeader("X-Seq", String(seq));
-    http.addHeader("X-Time", String(ep));
+    String iso = bridge::isoLocal(ep);
+    if (iso.length()) http.addHeader("X-Time", iso);
+    if (answer) http.addHeader("X-Kind", "answer");
     HoldFileStream hs(f);
     code = http.sendRequest("POST", &hs, sz);
     http.end();
@@ -312,14 +301,23 @@ static bool uploadNote(const char* path, uint16_t seq, uint32_t ep) {
   delete cl;
   f.close();
   gHttp = (int16_t)code;
-  bool ok = (code >= 200 && code < 300) || code == 409;        // 409 = bridge already has this seq
-  if (ok) { busLock(); gfs->remove(path); busUnlock(); }
-  return ok;
+  if ((code >= 200 && code < 300) || code == 409) {            // 200 also covers {"status":"duplicate"}
+    busLock(); gfs->remove(path); busUnlock();
+    return 1;
+  }
+  if (code == 400 || code == 413 || code == 415 || code == 422) {   // would never be accepted: park it, keep the queue moving
+    String rej = String(path) + ".rej";
+    busLock(); gfs->rename(path, rej.c_str()); busUnlock();
+    return -1;
+  }
+  return 0;
 }
 
-static void saveLast(const String& id, const String& spoken, const String& url, const String& md) {
+static void saveLast(const String& id, const String& spoken, const std::vector<String>& urls, const String& md) {
   if (!mountLfs()) return;
-  JsonDocument d; d["id"] = id; d["spoken"] = spoken; d["audio_url"] = url;
+  JsonDocument d; d["id"] = id; d["spoken"] = spoken;
+  JsonArray ua = d["audio_urls"].to<JsonArray>();
+  for (auto& u : urls) ua.add(u);
   busLock();
   File f = LittleFS.open("/dshift_last.json", "w");
   if (f) { serializeJson(d, f); f.close(); }
@@ -334,28 +332,28 @@ static void removeShiftDir() {
   busLock(); gfs->rmdir(d); busUnlock();                // only succeeds when empty
 }
 
+// Talks to POST /shift/finish. Returns true when the call was answered usefully (done / need_info).
+// Contract (dashie/bridge/shift.py): {"shift_id","ended_at"} -> {"status":"done","summary_md","spoken","audio_urls":[...],
+// "delivered":{...}} or {"status":"need_info","questions":[..],"round":n}. The bridge counts rounds itself (max 2).
 static bool doFinish() {
   String url = baseUrl() + "/shift/finish";
-  bool finalRound = !finInteractive || finRound >= 2;
   WiFiClient* cl = newClient(url);
-  HTTPClient http; http.setTimeout(75000); http.setConnectTimeout(6000); http.useHTTP10(true);
+  HTTPClient http; http.setTimeout(SHIFT_FINISH_HTTP_MS); http.setConnectTimeout(6000); http.useHTTP10(true);
   int code = -1;
-  char* buf = (char*)bigAlloc(24 * 1024);
+  constexpr size_t BUF = 32 * 1024;
+  char* buf = (char*)bigAlloc(BUF);
   size_t n = 0;
   if (buf && http.begin(*cl, url)) {
     http.addHeader("Content-Type", "application/json"); addAuth(http);
-    char body[200];
-    snprintf(body, sizeof(body),
-             "{\"shift_id\":\"%s\",\"ended_at\":%lu,\"notes\":%u,\"final\":%s,\"round\":%u,\"lang\":\"%s\"}",
-             sid, (unsigned long)t1, (unsigned)notesN, finalRound ? "true" : "false", (unsigned)(finRound + 1),
-             gLang ? "he" : "en");
-    code = http.POST((uint8_t*)body, strlen(body));
+    String iso = bridge::isoLocal(t1);
+    String body = String("{\"shift_id\":\"") + sid + "\"" + (iso.length() ? String(",\"ended_at\":\"") + iso + "\"" : String("")) + "}";
+    code = http.POST((uint8_t*)body.c_str(), body.length());
     if (code == 200) {
       WiFiClient* s = http.getStreamPtr();
       uint32_t last = millis();
-      while (n < 24 * 1024 - 1 && (http.connected() || s->available()) && millis() - last < 8000) {
+      while (n < BUF - 1 && (http.connected() || s->available()) && millis() - last < 8000) {
         int a = s->available();
-        if (a > 0) { n += s->readBytes(buf + n, min((size_t)a, (size_t)(24 * 1024 - 1 - n))); last = millis(); }
+        if (a > 0) { n += s->readBytes(buf + n, min((size_t)a, (size_t)(BUF - 1 - n))); last = millis(); }
         else vTaskDelay(5 / portTICK_PERIOD_MS);
       }
       buf[n] = 0;
@@ -373,12 +371,14 @@ static bool doFinish() {
         res = Result();
         res.summary = String(doc["summary_md"] | "");
         res.spoken = String(doc["spoken"] | "");
-        res.audioUrl = String(doc["audio_url"] | "");
+        JsonArray ua = doc["audio_urls"].as<JsonArray>();
+        for (JsonVariant u : ua) { String us = String(u.as<const char*>()); if (us.length()) res.audioUrls.push_back(us); }
+        if (res.audioUrls.empty()) { String one = String(doc["audio_url"] | ""); if (one.length()) res.audioUrls.push_back(one); }
+        for (auto& u : res.audioUrls) if (u.startsWith("/")) u = baseUrl() + u;
         bool em = doc["delivered"]["email"] | false;
         String docs = String(doc["delivered"]["docs"] | "");
         res.emailInfo = String(em ? "email " : "") + (docs.length() ? "docs" : "");
-        if (res.audioUrl.startsWith("/")) res.audioUrl = baseUrl() + res.audioUrl;
-        saveLast(String(sid), res.spoken, res.audioUrl, res.summary);
+        saveLast(String(sid), res.spoken, res.audioUrls, res.summary);
         bool wasDetached = finDetached;
         finWant = false;
         removeShiftDir();
@@ -386,18 +386,29 @@ static bool doFinish() {
         if (wasDetached) gSummaryReady = true;
         res.state = FS_DONE; resState = FS_DONE;
         handled = true;
-      } else if (status == "need_info" && !finalRound) {
-        res = Result();
-        JsonArray qs = doc["questions"].as<JsonArray>();
-        for (JsonVariant q : qs) { if (res.questions.size() < 3) res.questions.push_back(String(q.as<const char*>())); }
-        finWant = false; finRound++;
-        res.state = res.questions.empty() ? FS_ERR : FS_NEED; resState = res.state;
+      } else if (status == "need_info") {
+        if (finInteractive) {                       // the UI collects the answers (notes with X-Kind: answer), then finishes again
+          res = Result();
+          JsonArray qs = doc["questions"].as<JsonArray>();
+          for (JsonVariant q : qs) { if (res.questions.size() < 3) res.questions.push_back(String(q.as<const char*>())); }
+          finWant = false; finRound++;
+          res.state = res.questions.empty() ? FS_ERR : FS_NEED; resState = res.state;
+        } else {                                    // nobody to answer: ask again at once; after 2 rounds the bridge stops asking
+          finRound++;
+          nextTry = 0;
+        }
         handled = true;
       }
     }
   }
   if (buf) heap_caps_free(buf);
-  if (!handled && code >= 400 && code < 500 && code != 408 && code != 429) {   // wrong token / bad request: tell the UI
+  if (!handled && code == HTTPC_ERROR_READ_TIMEOUT) {
+    // The bridge may need ~90 s (LLM + TTS + e-mail) but HTTPClient gives up after 65 s. The server keeps working
+    // and answers a repeated /shift/finish from its cache once done, so just ask again shortly.
+    nextTry = millis() + 1000;
+    return true;
+  }
+  if (!handled && code >= 400 && code < 500 && code != 408 && code != 429) {   // wrong token / unknown shift: tell the UI
     res = Result(); res.http = (int16_t)code; res.state = FS_ERR; resState = FS_ERR;
   }
   return handled;
@@ -417,11 +428,12 @@ static void netTask(void*) {
       else ok = false;
     }
     if (ok) {
-      char path[96]; uint16_t seq; uint32_t ep;
+      char path[96]; uint16_t seq; uint32_t ep; bool ans = false;
       bool wantFinish = gFin && finWant;
       if (pendingN > 0 || wantFinish) {                 // scan the card only when there is something to do
-        if (oldestNote(path, sizeof(path), &seq, &ep)) {
-          if (uploadNote(path, seq, ep)) { if (pendingN) pendingN--; backoff = 4000; }
+        if (oldestNote(path, sizeof(path), &seq, &ep, &ans)) {
+          int ur = uploadNote(path, seq, ep, ans);
+          if (ur != 0) { if (pendingN) pendingN--; backoff = 4000; }
           else ok = false;
         } else if (wantFinish) {
           if (doFinish()) backoff = 4000;
@@ -504,7 +516,7 @@ Status status() {
 
 void hold(bool h) { gHold = h; }
 
-bool noteBegin() {
+bool noteBegin(bool answer) {
   if (!sid[0] || gRec || !wDone) return false;
   if (!ensureStorage()) { gWriteErr = true; return false; }
   if (!ring) {
@@ -514,8 +526,9 @@ bool noteBegin() {
   rHead = rTail = 0; wBytes = 0; wErr = false;
   uint32_t ep = nowEpoch();
   char d[48]; dirPath(d, sizeof(d));
-  snprintf(ntmp, sizeof(ntmp), "%s/n%04u_%lu.tmp", d, (unsigned)seqNext, (unsigned long)ep);
-  snprintf(nfin, sizeof(nfin), "%s/n%04u_%lu.wav", d, (unsigned)seqNext, (unsigned long)ep);
+  const char kind = answer ? 'a' : 'n';
+  snprintf(ntmp, sizeof(ntmp), "%s/%c%04u_%lu.tmp", d, kind, (unsigned)seqNext, (unsigned long)ep);
+  snprintf(nfin, sizeof(nfin), "%s/%c%04u_%lu.wav", d, kind, (unsigned)seqNext, (unsigned long)ep);
   busLock();
   gfs->mkdir(d);
   nf = gfs->open(ntmp, "w");
@@ -596,7 +609,7 @@ bool takeResult(Result& out) {
 
 bool hasLastSummary() { prefsOpen(); return sp.getBool("last", false); }   // flag only: no filesystem mount
 
-bool lastSummary(String& id, String& spoken, String& audioUrl) {
+bool lastSummary(String& id, String& spoken, std::vector<String>& audioUrls) {
   if (!mountLfs()) return false;
   busLock();
   File f = LittleFS.open("/dshift_last.json", "r");
@@ -604,7 +617,9 @@ bool lastSummary(String& id, String& spoken, String& audioUrl) {
   if (f) f.close();
   busUnlock();
   if (!ok) return false;
-  id = String(d["id"] | ""); spoken = String(d["spoken"] | ""); audioUrl = String(d["audio_url"] | "");
+  id = String(d["id"] | ""); spoken = String(d["spoken"] | "");
+  audioUrls.clear();
+  for (JsonVariant u : d["audio_urls"].as<JsonArray>()) audioUrls.push_back(String(u.as<const char*>()));
   gSummaryReady = false;
   return true;
 }
