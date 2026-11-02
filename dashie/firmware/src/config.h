@@ -37,7 +37,8 @@
 #define END_SILENCE_MS  900
 #define IDLE_DIM_MS     20000
 #define BRIDGE_TIMEOUT  12000
-#define RESP_MAX_BYTES  (256 * 1024)
+#define RESP_MAX_BYTES  (16 * 1024)    // JSON reply from bridge
+#define AUDIO_MAX_BYTES (600 * 1024)   // max WAV downloaded from audio_url (PSRAM)
 
 // Driving-event thresholds (in g)
 #define BRAKE_G         0.45f

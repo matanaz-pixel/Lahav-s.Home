@@ -1,0 +1,7 @@
+// Rename to font_he.h after generating a real VLW font (see ../README.md).
+#pragma once
+#include <stdint.h>
+const uint8_t font_he_vlw[] PROGMEM = {
+  /* bytes of Heebo20.vlw (xxd -i) */
+  0x00
+};
