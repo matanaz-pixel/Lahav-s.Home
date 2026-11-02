@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dashie – הדמיה</title>
+<style>
+/* Layout concept: dark dashboard-instrument page. Device on one side, instruments and logs as panels on the other. */
+:root{
+  --bg:#0d1014; --panel:#151a20; --panel2:#1b222a; --line:#27303a;
+  --fg:#e8ecf0; --muted:#8c98a6; --accent:#ffb02e; --accent-ink:#1a1100;
+  --good:#46d17a; --warn:#ffcf4a; --bad:#ff5d5d; --info:#5cc8ff;
+  --shell:#d9dde2; --shell2:#aeb4bb; --btn:#2b323b;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI","Heebo","Arial Hebrew",Arial,sans-serif;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    --bg:#eef0f3; --panel:#ffffff; --panel2:#f3f5f7; --line:#d6dbe1;
+    --fg:#14181d; --muted:#586472; --accent:#b86a00; --accent-ink:#ffffff;
+    --good:#14803f; --warn:#8a6500; --bad:#c02424; --info:#0a6fa8;
+    --shell:#2a2f36; --shell2:#444b54; --btn:#5a626c; color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#eef0f3; --panel:#ffffff; --panel2:#f3f5f7; --line:#d6dbe1;
+  --fg:#14181d; --muted:#586472; --accent:#b86a00; --accent-ink:#ffffff;
+  --good:#14803f; --warn:#8a6500; --bad:#c02424; --info:#0a6fa8;
+  --shell:#2a2f36; --shell2:#444b54; --btn:#5a626c; color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--sans);
+  padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:20px}
+header h1{margin:0;font-size:clamp(1.6rem,4vw,2.3rem);letter-spacing:-.01em;text-wrap:balance}
+header h1 b{color:var(--accent)}
+header p{margin:.3rem 0 0;color:var(--muted);max-width:62ch}
+.grid{display:grid;grid-template-columns:minmax(0,500px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.col{display:grid;gap:16px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}
+.card h2{margin:0 0 10px;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.card h2 span{color:var(--accent)}
+
+/* device */
+.device{background:linear-gradient(160deg,var(--shell),var(--shell2));border-radius:26px;padding:22px 22px 16px;
+  box-shadow:0 18px 40px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.35);direction:ltr}
+.bezel{background:#05070a;border-radius:10px;padding:10px;box-shadow:inset 0 2px 8px rgba(0,0,0,.8)}
+#lcd{display:block;width:100%;height:auto;aspect-ratio:4/3;border-radius:4px;cursor:pointer;image-rendering:auto}
+.touchbtns{display:flex;justify-content:space-around;margin-top:14px}
+.tb{width:72px;height:26px;border-radius:13px;border:0;background:var(--btn);color:#fff;font:700 13px var(--mono);
+  box-shadow:0 3px 0 rgba(0,0,0,.35);cursor:pointer}
+.tb:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.35)}
+.tb:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--info);outline-offset:2px}
+.brand{font:700 11px var(--mono);letter-spacing:.3em;text-align:center;margin-top:10px;color:rgba(0,0,0,.45)}
+.statusrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);font:600 12px var(--mono)}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.pill.on i{background:var(--good)}
+.pill.rec i{background:var(--bad)}
+.hint{color:var(--muted);font-size:.85rem;margin:6px 0 0}
+
+/* controls */
+button.btn{font:600 .9rem var(--sans);border:1px solid var(--line);background:var(--panel2);color:var(--fg);padding:8px 14px;border-radius:10px;cursor:pointer}
+button.btn:hover{border-color:var(--accent)}
+button.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.btn.dng{border-color:var(--bad);color:var(--bad)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row+.row{margin-top:10px}
+label.f{display:grid;gap:4px;font-size:.85rem;color:var(--muted);flex:1 1 180px;min-width:0}
+label.f output{color:var(--fg);font-family:var(--mono)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+input[type=text],select{width:100%;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font:inherit}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:.82rem var(--sans);padding:4px 10px;border-radius:99px;border:1px solid var(--line);background:var(--panel2);color:var(--fg);cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+canvas.meter{width:100%;height:auto;aspect-ratio:5/1;display:block;background:var(--panel2);border-radius:10px;border:1px solid var(--line)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font:.78rem var(--mono);margin-top:8px;color:var(--muted)}
+.legend b{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-inline-end:4px}
+.readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:10px}
+.readout div{background:var(--panel2);border-radius:10px;padding:8px 10px;border:1px solid var(--line)}
+.readout small{display:block;color:var(--muted);font-size:.72rem}
+.readout strong{font:700 1.15rem var(--mono);font-variant-numeric:tabular-nums}
+.pad{width:160px;height:160px;border-radius:14px;background:var(--panel2);border:1px solid var(--line);position:relative;touch-action:none;flex:0 0 auto;direction:ltr}
+.pad::before,.pad::after{content:"";position:absolute;background:var(--line)}
+.pad::before{left:50%;top:6px;bottom:6px;width:1px}.pad::after{top:50%;left:6px;right:6px;height:1px}
+.pad .dot{position:absolute;width:26px;height:26px;margin:-13px;border-radius:50%;background:var(--accent);left:50%;top:50%;box-shadow:0 0 14px var(--accent)}
+.pad span{position:absolute;font:10px var(--mono);color:var(--muted)}
+#log{height:230px;overflow:auto;background:var(--panel2);border-radius:10px;border:1px solid var(--line);padding:8px 10px;font:12px/1.55 var(--mono);direction:ltr;text-align:left}
+#log div{white-space:pre-wrap;overflow-wrap:anywhere}
+#log .t{color:var(--muted)} #log .s{color:var(--accent)} #log .e{color:var(--bad)} #log .g{color:var(--good)} #log .i{color:var(--info)}
+pre.json{margin:8px 0 0;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;font:12px/1.5 var(--mono);direction:ltr;text-align:left;overflow:auto;max-height:150px}
+table.parts{width:100%;border-collapse:collapse;font-size:.88rem}
+table.parts td,table.parts th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;vertical-align:top}
+table.parts th{color:var(--muted);font-weight:600;font-size:.75rem}
+.scroll{overflow-x:auto}
+ol.steps{margin:10px 0 0;padding-inline-start:20px;display:grid;gap:4px}
+details summary{cursor:pointer;font-weight:600}
+.warn{border-inline-start:3px solid var(--warn);padding:6px 10px;background:var(--panel2);border-radius:6px;margin-top:10px;font-size:.88rem}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1><b>Dashie</b> – העוזר הקטן שיושב על הדשבורד</h1>
+  <p>הדמיה שרצה על אותה לוגיקה כמו הקושחה: מכונת מצבים, הפעלה בקול בקריאה כפולה, זיהוי בלימות ותאונה. אפשר לדבר אל המיקרופון האמיתי או לסמלץ.</p>
+</header>
+
+<div class="grid">
+  <!-- LEFT: device -->
+  <div class="col">
+    <div class="device" aria-label="M5Stack Core2">
+      <div class="bezel"><canvas id="lcd" width="640" height="480" aria-label="מסך Dashie"></canvas></div>
+      <div class="touchbtns">
+        <button class="tb" id="bA" title="A (מקש a)">A</button>
+        <button class="tb" id="bB" title="B (מקש b)">B</button>
+        <button class="tb" id="bC" title="C (מקש c)">C</button>
+      </div>
+      <div class="brand">M5STACK CORE2 · DASHIE</div>
+    </div>
+    <div class="card">
+      <div class="statusrow">
+        <span class="pill" id="pState"><i></i><b>IDLE</b></span>
+        <span class="pill" id="pScreen">מסך: Face</span>
+        <span class="pill" id="pDrive">חניה</span>
+      </div>
+      <p class="hint">A = הפעלה (בהגדרות: פריט הבא) · B = מסך הבא · C = פעולה לפי מסך. אפשר גם ללחוץ על המסך, או על המקשים a / b / c.</p>
+    </div>
+  </div>
+
+  <!-- RIGHT: instruments -->
+  <div class="col">
+    <section class="card">
+      <h2><span>●</span> מיקרופון וטריגר קול</h2>
+      <div class="row">
+        <button class="btn pri" id="micBtn">הפעל מיקרופון אמיתי</button>
+        <button class="btn" id="shoutBtn">אין מיקרופון, סמלץ קריאה</button>
+        <button class="btn" id="dblBtn">סמלץ קריאה כפולה</button>
+        <span class="pill" id="pMic"><i></i>מקור: סימולציה</span>
+      </div>
+      <div class="row">
+        <label class="f">רעש בתא הנוסעים (סימולציה) <output id="noiseO">55 dB</output>
+          <input type="range" id="noise" min="35" max="95" value="55"></label>
+        <label class="f">רגישות הטריגר
+          <select id="sensSel"><option value="0">נמוכה (+16dB)</option><option value="1" selected>בינונית (+12dB)</option><option value="2">גבוהה (+9dB)</option></select></label>
+      </div>
+      <canvas id="meter" class="meter" width="1000" height="200" aria-label="גרף רמת קול"></canvas>
+      <div class="legend"><span><b style="background:var(--info)"></b>רמה</span><span><b style="background:var(--good)"></b>noise floor</span><span><b style="background:var(--bad)"></b>סף טריגר</span></div>
+      <div class="readout">
+        <div><small>רמה</small><strong id="rLvl">0</strong></div>
+        <div><small>noise floor</small><strong id="rFloor">0</strong></div>
+        <div><small>סף</small><strong id="rThr">0</strong></div>
+        <div><small>פרצים בחלון</small><strong id="rBurst">0/2</strong></div>
+        <div><small>Refractory</small><strong id="rRef">–</strong></div>
+      </div>
+      <p class="hint">טריגר: שני פרצי קול חזקים (200-700ms כל אחד) בתוך 1.4 שניות. הסף נלמד אדפטיבית ועולה ב-4dB בנסיעה.</p>
+    </section>
+
+    <section class="card">
+      <h2><span>●</span> מה אמרת? (bridge מדומה)</h2>
+      <div class="row">
+        <label class="f" style="flex:2 1 240px">הפקודה שתיאמר בהקלטה הבאה
+          <input type="text" id="said" placeholder="למשל: מה מזג האוויר מחר?" value="נווט הביתה"></label>
+        <label class="f">חיבור
+          <select id="netSel"><option value="ok">bridge מחובר</option><option value="nobridge">אין bridge</option><option value="nowifi">אין Wi-Fi</option></select></label>
+      </div>
+      <div class="chips" id="chips"></div>
+      <pre class="json" id="json">{ "text": "", "reply": "", "action": null }</pre>
+      <p class="hint">התשובות מוצגות בעברית כאן. במכשיר האמיתי ממשק המסך באנגלית בשלב הראשון, ועברית דורשת פונט ו-RTL.</p>
+    </section>
+
+    <section class="card">
+      <h2><span>●</span> סימולטור רכב ו-IMU</h2>
+      <div class="row" style="align-items:flex-start">
+        <div class="pad" id="pad" aria-label="גרור לתאוצה"><div class="dot" id="padDot"></div>
+          <span style="top:3px;left:50%;transform:translateX(-50%)">האצה</span>
+          <span style="bottom:3px;left:50%;transform:translateX(-50%)">בלימה</span>
+          <span style="left:4px;top:50%;transform:translateY(-50%)">שמאל</span>
+          <span style="right:4px;top:50%;transform:translateY(-50%)">ימין</span></div>
+        <div style="flex:1 1 220px;min-width:0;display:grid;gap:10px">
+          <label class="f">מהירות <output id="spdO">50 קמ״ש</output><input type="range" id="speed" min="0" max="130" value="50"></label>
+          <label class="f">צד (X) <output id="axO">0.00g</output><input type="range" id="axS" min="-150" max="150" value="0"></label>
+          <label class="f">קדימה/אחורה (Y) <output id="ayO">0.00g</output><input type="range" id="ayS" min="-150" max="150" value="0"></label>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn" id="brakeBtn">בלימה חדה</button>
+        <button class="btn" id="turnBtn">פנייה חדה</button>
+        <button class="btn dng" id="crashBtn">התנגשות</button>
+      </div>
+      <p class="hint">הפד חוזר למרכז כשעוזבים. בלימה/פנייה מעל 0.45g נספרות, מעל 4g במשך 30ms מפעיל התראת תאונה עם ספירה לאחור של 15 שניות.</p>
+    </section>
+
+    <section class="card">
+      <h2><span>●</span> יומן מצב פנימי</h2>
+      <div id="log" aria-live="off"></div>
+    </section>
+
+    <section class="card">
+      <h2><span>●</span> איך בונים את זה</h2>
+      <div class="scroll"><table class="parts">
+        <thead><tr><th>חלק</th><th>תפקיד</th><th>מחיר משוער</th></tr></thead>
+        <tbody>
+          <tr><td>M5Stack Core2 v1.1</td><td>מסך מגע, מיקרופון PDM, רמקול, IMU. הלוח כולו.</td><td>~$50</td></tr>
+          <tr><td>שקע USB לרכב 5V/2A</td><td>הפעלה אוטומטית עם התנעה</td><td>~$8</td></tr>
+          <tr><td>כבל USB-C קצר</td><td>חיבור הלוח לשקע</td><td>~$4</td></tr>
+          <tr><td>מעמד דשבורד / סרט הדבקה</td><td>הלוח לא זז בפניות</td><td>~$10</td></tr>
+          <tr><td>הוטספוט בטלפון</td><td>Wi-Fi ל-bridge (תמלול + תשובה)</td><td>0</td></tr>
+          <tr><td>אופציונלי: CoreS3</td><td>ESP32-S3 לזיהוי מילת הפעלה מקומית</td><td>~$60</td></tr>
+        </tbody></table></div>
+      <ol class="steps">
+        <li>התקן PlatformIO ופתח את התיקייה dashie/firmware.</li>
+        <li>עדכן WIFI_SSID, WIFI_PASS ו-BRIDGE_URL ב-config.h.</li>
+        <li>הרץ את bridge/server.py במחשב או בשרת קטן.</li>
+        <li>העלה לקושחה עם <code>pio run -e core2 -t upload</code>.</li>
+        <li>חבר לרכב, הצמד לדשבורד, ואמור פעמיים: "היי!" "היי!".</li>
+      </ol>
+      <div class="warn">התקן את המכשיר באופן חוקי ובטוח, ואל תסתכל על המסך בזמן נסיעה. כל השימוש מתבצע בקול.</div>
+    </section>
+  </div>
+</div>
+</div>
+
+<script>
+(()=>{
+"use strict";
+/* ---------- helpers ---------- */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lcd=$("lcd"), ctx=lcd.getContext("2d");
+ctx.scale(2,2);
+const W=320,H=240;
+const COLORS=[["AMBER","#ffb02e"],["CYAN","#46d3ff"],["GREEN","#4fe08a"],["PINK","#ff6fb0"]];
+const SENS=[["LOW",16],["MED",12],["HIGH",9]];
+const SCREENS=["Face","Cabin Noise","G-Force","Trip","Settings"];
+const SETTINGS=["Brightness","Volume","Trigger","Color","Voice wake"];
+const BG="#0a0e13", FG="#e8edf2", DIM="#6b7886";
+const S={
+  state:"IDLE", stateT:0, screen:0,
+  set:{bright:4,vol:2,sens:1,color:0,wake:true}, setSel:0,
+  level:50, floor:50, thr:62, burstActive:false, burstStart:0, burstBad:false, bursts:[], refr:0,
+  lastTouch:0, moodOverride:0, mood:"happy", moodUntil:0,
+  micOn:false, shoutUntil:0,
+  recStart:0, speechHeard:false, lastSpeech:0, speechUntil:0, phrase:"", reply:"", errMsg:"", thinkDur:1500, recLevels:[],
+  speed:50, sax:0, say:0, impAx:0, impAy:0, impUntil:0, padAx:0, padAy:0, ax:0, ay:0, gmax:0,
+  brakeLock:false, turnLock:false, crashT:0, crash:null,
+  trip:{time:0,brakes:0,turns:0,gmax:0,noiseSum:0,noiseN:0,dist:0},
+  hist:[], histAcc:0, histN:0, quietSec:0, bestQuiet:0, quietAcc:0,
+  blinkAt:1500, blinkT:-1, lookX:0, lookY:0, lookTX:0, lookTY:0, lookAt:0,
+  samples:[], sampleAcc:0
+};
+const accent=()=>COLORS[S.set.color][1];
+const driving=()=>S.speed>5;
+
+/* ---------- log ---------- */
+const logEl=$("log");
+function log(msg,cls){
+  const d=document.createElement("div");
+  const t=(performance.now()/1000).toFixed(1).padStart(6," ");
+  d.innerHTML='<span class="t">['+t+'s]</span> <span class="'+(cls||"")+'"></span>';
+  d.lastChild.textContent=msg;
+  logEl.appendChild(d);
+  while(logEl.childNodes.length>120) logEl.removeChild(logEl.firstChild);
+  logEl.scrollTop=logEl.scrollHeight;
+}
+
+/* ---------- sound ---------- */
+let actx=null;
+function audioCtx(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
+function beep(f,d,v){
+  if(S.set.vol===0) return;
+  const a=audioCtx(); if(!a) return; if(a.state==="suspended") a.resume();
+  try{
+    const o=a.createOscillator(), g=a.createGain();
+    o.type="sine"; o.frequency.value=f; g.gain.value=(v||0.05)*S.set.vol/2;
+    o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+d/1000);
+  }catch(e){}
+}
+
+/* ---------- microphone ---------- */
+let analyser=null, abuf=null;
+async function enableMic(){
+  try{
+    const st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    const a=audioCtx(); const src=a.createMediaStreamSource(st);
+    analyser=a.createAnalyser(); analyser.fftSize=1024; abuf=new Float32Array(analyser.fftSize);
+    src.connect(analyser); S.micOn=true;
+    $("pMic").classList.add("on"); $("pMic").lastChild.textContent="מקור: מיקרופון אמיתי";
+    $("micBtn").textContent="מיקרופון פעיל"; log("מיקרופון אמיתי פעיל. אמור היי! היי!","g");
+  }catch(e){
+    S.micOn=false; log("אין גישה למיקרופון ("+(e&&e.name||"שגיאה")+"). ממשיכים בסימולציה.","e");
+    $("micBtn").textContent="אין מיקרופון, השתמש בסימולציה";
+  }
+}
+function sampleLevel(now,dt){
+  let target;
+  if(S.micOn&&analyser){
+    analyser.getFloatTimeDomainData(abuf);
+    let s=0; for(let i=0;i<abuf.length;i++) s+=abuf[i]*abuf[i];
+    const rms=Math.sqrt(s/abuf.length);
+    target=clamp(20*Math.log10(rms+1e-6)+100,30,110);
+  }else{
+    const base=+$("noise").value;
+    target=base+(Math.random()-0.5)*3+Math.sin(now/700)*1.2;
+    if(now<S.shoutUntil) target=Math.max(target,S.floor+24+Math.random()*3);
+    if(S.state==="RECORD"&&now<S.speechUntil) target=Math.max(target,base+16+Math.random()*6);
+  }
+  const k=target>S.level?0.55:0.18;
+  S.level+= (target-S.level)*k;
+}
+
+/* ---------- trigger (same algorithm as firmware) ---------- */
+function threshold(){ return S.floor+SENS[S.set.sens][1]+(driving()?4:0); }
+function updateTrigger(now,dt){
+  S.thr=threshold();
+  const above=S.level>S.thr;
+  if(S.state==="IDLE"||S.state==="ERROR"){
+    if(!above&&!S.burstActive){ S.floor+=(S.level-S.floor)*(1-Math.exp(-dt/3000)); }
+    else{ S.floor+=(S.level-S.floor)*(1-Math.exp(-dt/30000)); }
+  }
+  if(S.state!=="IDLE"||!S.set.wake||now<S.refr){ S.burstActive=false; return; }
+  if(above&&!S.burstActive){ S.burstActive=true; S.burstStart=now; S.burstBad=false; }
+  if(S.burstActive){
+    if(now-S.burstStart>700) S.burstBad=true;
+    if(S.level<S.thr-3){
+      const dur=now-S.burstStart; S.burstActive=false;
+      if(!S.burstBad&&dur>=200){ S.bursts.push(now); log("פרץ קול "+Math.round(dur)+"ms ("+S.level.toFixed(0)+" dB)","i"); }
+      else log("פרץ נדחה ("+Math.round(dur)+"ms, מחוץ ל-200-700)","t");
+    }
+  }
+  S.bursts=S.bursts.filter(t=>now-t<1400);
+  if(S.bursts.length>=2){ log("קריאה כפולה זוהתה","g"); wake("voice",now); }
+}
+
+/* ---------- state machine ---------- */
+function setState(s,now){ S.state=s; S.stateT=now; $("pState").lastChild.textContent=s;
+  $("pState").className="pill"+(s==="RECORD"?" rec":s!=="IDLE"?" on":""); log("מצב → "+s,"s"); }
+const SAMPLES=["מה מזג האוויר מחר?","נווט הביתה","שים מוזיקה","מה השעה?","אני עייף","כמה דלק נשאר?","התקשר לאמא"];
+function wake(src,now){
+  if(S.state!=="IDLE") return;
+  S.bursts=[]; S.burstActive=false; S.refr=now+3000+400; S.lastTouch=now;
+  beep(880,90); log("הפעלה ("+src+")","s"); setState("LISTEN",now);
+}
+function bridgeReply(text){
+  const t=new Date(), hhmm=t.toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit"});
+  const R=[
+    [/מזג|גשם|חם|קר|שמש/,"בחוץ 24 מעלות ובהיר. בלי גשם בדרך.","face:happy"],
+    [/נווט|הביתה|ניווט|וויז|דרך/,"מחשב מסלול הביתה. 18 דקות, פקק קל בכניסה לעיר.",null],
+    [/מוזיק|שיר|פלייליסט|רדיו/,"מנגן את רשימת הנסיעות שלך, עוצמה 40 אחוז.","beep"],
+    [/שעה|זמן|מתי/,"השעה "+hhmm+".",null],
+    [/עייף|ישן|מתנמנם|הפסקה/,"נסיעה ארוכה בלי עצירה. יש חניון נוח בעוד 4 ק״מ.","face:worried"],
+    [/דלק|תדלוק|טנק/,"נשאר בערך רבע מיכל. תחנת דלק בעוד 3 ק״מ.",null],
+    [/התקשר|צלצל|אמא|אבא/,"מחייג. תגיד 'נתק' כדי לסיים.","beep"]
+  ];
+  for(const r of R) if(r[0].test(text)) return {text,reply:r[1],action:r[2],audio_b64:null};
+  return {text,reply:"שמעתי: «"+text+"». עוד לא למדתי את זה.",action:null,audio_b64:null};
+}
+function updateFSM(now){
+  const el=now-S.stateT;
+  if(S.state==="LISTEN"&&el>400){
+    S.phrase=$("said").value.trim()||SAMPLES[Math.floor(Math.random()*SAMPLES.length)];
+    S.recStart=now; S.speechHeard=false; S.lastSpeech=now; S.recLevels=[];
+    S.speechUntil=now+600+Math.min(2500,S.phrase.length*90);
+    setState("RECORD",now);
+  }else if(S.state==="RECORD"){
+    if(!S.micOn||true){ /* VAD works the same for mic or sim */ }
+    if(S.level>S.floor+8){ S.speechHeard=true; S.lastSpeech=now; }
+    S.recSample=(S.recSample||0)+1; if(S.recSample%2===0){ S.recLevels.push(S.level); if(S.recLevels.length>64) S.recLevels.shift(); }
+    if(S.speechHeard&&now-S.lastSpeech>900){ log("VAD: 900ms שקט, סוף הקלטה","i"); startThink(now); }
+    else if(el>6000){ log("הקלטה הגיעה ל-6 שניות","i"); startThink(now); }
+    else if(!S.speechHeard&&el>3000){ fail("Didn't catch that",now); }
+  }else if(S.state==="THINK"){
+    if(el>S.thinkDur){
+      const net=$("netSel").value;
+      if(net==="nowifi") fail("No Wi-Fi",now);
+      else if(net==="nobridge") fail("No bridge",now);
+      else{
+        const j=bridgeReply(S.phrase); S.reply=j.reply;
+        $("json").textContent=JSON.stringify({text:j.text,reply:j.reply,action:j.action,audio_b64:j.audio_b64},null,1);
+        log("bridge ← POST /voice (WAV "+(((now-S.recStart)/1000)*32).toFixed(0)+" KB)","i");
+        if(j.action==="beep") beep(1320,120);
+        if(j.action&&j.action.startsWith("face:")){ S.mood=j.action.slice(5); S.moodUntil=now+8000; }
+        beep(1175,80);
+        setState("REPLY",now);
+      }
+    }
+  }else if(S.state==="REPLY"&&el>8000){ setState("IDLE",now); }
+  else if(S.state==="ERROR"&&el>3000){ setState("IDLE",now); }
+}
+function startThink(now){ S.thinkDur=1200+Math.random()*800; setState("THINK",now); }
+function fail(msg,now){ S.errMsg=msg; beep(220,220); log("שגיאה: "+msg,"e"); setState("ERROR",now); S.refr=now+2000; }
+
+/* ---------- IMU ---------- */
+function updateIMU(now,dt){
+  let ax=S.sax+S.padAx, ay=S.say+S.padAy;
+  if(now<S.impUntil){ ax+=S.impAx; ay+=S.impAy; }
+  const mag=Math.hypot(ax,ay);
+  S.ax+=(ax-S.ax)*0.35; S.ay+=(ay-S.ay)*0.35;
+  const gm=Math.hypot(S.ax,S.ay);
+  if(gm>S.gmax) S.gmax=gm;
+  if(gm>S.trip.gmax) S.trip.gmax=gm;
+  // crash
+  if(!S.crash){
+    if(mag>4) S.crashT+=dt; else S.crashT=0;
+    if(S.crashT>=30){ S.crash={t0:now}; S.crashT=0; log("IMPACT: "+mag.toFixed(1)+"g, ספירה לאחור 15 שניות","e"); beep(1500,300,0.1); }
+  }
+  // hard brake / sharp turn (counted only when driving)
+  if(S.ay<-0.45&&!S.brakeLock){ S.brakeLock=true; if(driving()&&!S.crash){ S.trip.brakes++; log("בלימה חדה "+S.ay.toFixed(2)+"g (סה״כ "+S.trip.brakes+")","i"); } }
+  if(S.ay>-0.3) S.brakeLock=false;
+  if(Math.abs(S.ax)>0.45&&!S.turnLock){ S.turnLock=true; if(driving()&&!S.crash){ S.trip.turns++; log("פנייה חדה "+S.ax.toFixed(2)+"g (סה״כ "+S.trip.turns+")","i"); } }
+  if(Math.abs(S.ax)<0.3) S.turnLock=false;
+  if(S.crash){
+    const left=15-(now-S.crash.t0)/1000;
+    if(left<=0&&!S.crash.sos){ S.crash.sos=true; log("SOS – call emergency","e"); beep(2000,500,0.1); }
+    else if(!S.crash.sos&&Math.floor(left)!==S.crash.last){ S.crash.last=Math.floor(left); beep(1000,60,0.05); }
+  }
+}
+function impulse(ax,ay,ms){ S.impAx=ax; S.impAy=ay; S.impUntil=performance.now()+ms; }
+
+/* ---------- stats ---------- */
+function updateStats(now,dt){
+  S.histAcc+=dt; S.histN+=S.level*dt;
+  if(S.histAcc>=1000){ S.hist.push(S.histN/S.histAcc); if(S.hist.length>60) S.hist.shift(); S.histAcc=0; S.histN=0;
+    if(S.level<60){ S.quietSec++; if(S.quietSec>S.bestQuiet) S.bestQuiet=S.quietSec; } else S.quietSec=0; }
+  if(driving()){ S.trip.time+=dt/1000; S.trip.dist+=S.speed*dt/3600000; S.trip.noiseSum+=S.level*dt; S.trip.noiseN+=dt; }
+  S.sampleAcc+=dt; if(S.sampleAcc>=50){ S.sampleAcc=0; S.samples.push([S.level,S.floor,S.thr]); if(S.samples.length>200) S.samples.shift(); }
+  S.saveAcc=(S.saveAcc||0)+dt; if(S.saveAcc>30000){ S.saveAcc=0; try{ localStorage.setItem("dashie.trip",JSON.stringify(S.trip)); }catch(e){} }
+}
+
+/* ---------- buttons ---------- */
+function press(b){
+  const now=performance.now(); S.lastTouch=now; audioCtx();
+  if(S.crash){ log("ביטול התראת תאונה: אני בסדר","g"); S.crash=null; beep(660,100); return; }
+  if(b==="A"){
+    if(S.screen===4){ S.setSel=(S.setSel+1)%SETTINGS.length; return; }
+    if(S.state==="IDLE") wake("button",now);
+    else if(S.state==="RECORD") { log("עצירה ידנית","i"); startThink(now); }
+    else if(S.state==="REPLY"||S.state==="ERROR") setState("IDLE",now);
+  }else if(b==="B"){ S.screen=(S.screen+1)%SCREENS.length; $("pScreen").textContent="מסך: "+SCREENS[S.screen]; beep(740,40); log("מסך → "+SCREENS[S.screen],"s"); }
+  else if(b==="C"){
+    const st=S.set;
+    if(S.screen===0){ S.moodOverride=(S.moodOverride+1)%4; log("מצב רוח ידני: "+["AUTO","HAPPY","WORRIED","ANGRY"][S.moodOverride],"i"); }
+    else if(S.screen===1){ S.quietSec=0; S.bestQuiet=0; }
+    else if(S.screen===2){ S.gmax=0; }
+    else if(S.screen===3){ S.trip={time:0,brakes:0,turns:0,gmax:0,noiseSum:0,noiseN:0,dist:0}; log("טיול אופס","i"); }
+    else if(S.screen===4){
+      switch(S.setSel){
+        case 0: st.bright=st.bright%5+1; break;
+        case 1: st.vol=(st.vol+1)%5; break;
+        case 2: st.sens=(st.sens+1)%3; $("sensSel").value=st.sens; break;
+        case 3: st.color=(st.color+1)%COLORS.length; break;
+        case 4: st.wake=!st.wake; break;
+      }
+      beep(900,40);
+    }
+  }
+}
+$("bA").onclick=()=>press("A"); $("bB").onclick=()=>press("B"); $("bC").onclick=()=>press("C");
+lcd.addEventListener("click",()=>{ if(S.crash||S.state==="IDLE"&&S.screen===0) press("A"); else S.lastTouch=performance.now(); });
+document.addEventListener("keydown",e=>{
+  if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+  const k=e.key.toLowerCase(); if(k==="a"||k==="b"||k==="c") press(k.toUpperCase());
+});
+$("sensSel").onchange=e=>{ S.set.sens=+e.target.value; };
+$("micBtn").onclick=()=>{ audioCtx(); if(!S.micOn) enableMic(); };
+$("shoutBtn").onclick=()=>{ audioCtx(); S.shoutUntil=performance.now()+420; };
+$("dblBtn").onclick=()=>{ audioCtx(); const n=performance.now(); S.shoutUntil=n+420; setTimeout(()=>{ S.shoutUntil=performance.now()+420; },700); };
+$("noise").oninput=e=>{ $("noiseO").textContent=e.target.value+" dB"; };
+$("speed").oninput=e=>{ S.speed=+e.target.value; $("spdO").textContent=S.speed+" קמ״ש"; $("pDrive").textContent=driving()?"בנסיעה":"חניה"; };
+$("axS").oninput=e=>{ S.sax=e.target.value/100; $("axO").textContent=S.sax.toFixed(2)+"g"; };
+$("ayS").oninput=e=>{ S.say=e.target.value/100; $("ayO").textContent=S.say.toFixed(2)+"g"; };
+$("brakeBtn").onclick=()=>impulse(0,-0.7,700);
+$("turnBtn").onclick=()=>impulse(0.65,0,800);
+$("crashBtn").onclick=()=>impulse(0,-5.5,120);
+const SAMPLE_CHIPS=SAMPLES;
+SAMPLE_CHIPS.forEach(s=>{ const b=document.createElement("button"); b.className="chip"; b.textContent=s; b.onclick=()=>{ $("said").value=s; }; $("chips").appendChild(b); });
+
+/* pad drag */
+const pad=$("pad"), dot=$("padDot"); let dragging=false;
+function padMove(e){
+  const r=pad.getBoundingClientRect();
+  const x=clamp((e.clientX-r.left)/r.width*2-1,-1,1), y=clamp((e.clientY-r.top)/r.height*2-1,-1,1);
+  S.padAx=x*0.9; S.padAy=-y*0.9; // up = accelerate (+), down = brake (-)
+  dot.style.left=(50+x*40)+"%"; dot.style.top=(50+y*40)+"%";
+}
+pad.addEventListener("pointerdown",e=>{ dragging=true; pad.setPointerCapture(e.pointerId); padMove(e); });
+pad.addEventListener("pointermove",e=>{ if(dragging) padMove(e); });
+const padEnd=()=>{ dragging=false; S.padAx=0; S.padAy=0; dot.style.left="50%"; dot.style.top="50%"; };
+pad.addEventListener("pointerup",padEnd); pad.addEventListener("pointercancel",padEnd);
+
+/* ---------- drawing ---------- */
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function txt(s,x,y,size,color,align,font,dir){
+  ctx.font=(font||"600")+" "+size+"px "+(dir?"system-ui,Arial,sans-serif":"ui-monospace,Menlo,Consolas,monospace");
+  ctx.fillStyle=color; ctx.textAlign=align||"left"; ctx.textBaseline="alphabetic"; ctx.direction=dir||"ltr"; ctx.fillText(s,x,y); ctx.direction="ltr";
+}
+function wrap(s,maxW,size){
+  ctx.font="500 "+size+"px system-ui,Arial,sans-serif"; ctx.direction="rtl";
+  const words=s.split(" "), lines=[]; let cur="";
+  for(const w of words){ const t=cur?cur+" "+w:w; if(ctx.measureText(t).width>maxW&&cur){ lines.push(cur); cur=w; } else cur=t; }
+  if(cur) lines.push(cur); ctx.direction="ltr"; return lines;
+}
+function moodFromLevel(l){ return l<62?"happy":l<75?"worried":"angry"; }
+function currentMood(now){
+  if(S.moodOverride) return ["","happy","worried","angry"][S.moodOverride];
+  if(now<S.moodUntil) return S.mood;
+  return moodFromLevel(S.level);
+}
+function drawFace(cx,cy,sc,mood,o){
+  o=o||{}; const col=accent();
+  const ew=54*sc*(o.big||1), eh=(o.eh||70)*sc*(o.big||1), gap=62*sc;
+  let blink=1; if(S.blinkT>=0){ const p=(performance.now()-S.blinkT)/160; blink=p<0.5?1-p*2*0.92:0.08+(p-0.5)*2*0.92; if(p>=1){ S.blinkT=-1; } }
+  const lx=o.look?S.lookX*sc:0, ly=o.look?S.lookY*sc:(o.ly||0)*sc;
+  [-1,1].forEach(side=>{
+    const x=cx+side*gap+lx, y=cy+ly;
+    const h=Math.max(4,eh*(o.confused&&side>0?0.55:1)*blink);
+    ctx.fillStyle=col; rr(x-ew/2,y-h/2,ew,h,18*sc); ctx.fill();
+    ctx.fillStyle="rgba(255,255,255,.45)"; rr(x-ew/2+6*sc,y-h/2+6*sc,10*sc,16*sc*blink,5*sc); ctx.fill();
+    ctx.fillStyle=BG;
+    if(mood==="happy"){ ctx.beginPath(); ctx.arc(x,y+eh*0.62,ew*0.78,0,Math.PI*2); ctx.fill(); }
+    else if(mood==="angry"){ ctx.beginPath(); ctx.moveTo(x-ew/2-4,y-eh/2-6); ctx.lineTo(x+ew/2+4,y-eh/2-6); ctx.lineTo(x-side*(ew/2+4),y-eh/2+eh*0.38); ctx.closePath(); ctx.fill(); }
+    else if(mood==="worried"){ ctx.beginPath(); ctx.moveTo(x-ew/2-4,y-eh/2-6); ctx.lineTo(x+ew/2+4,y-eh/2-6); ctx.lineTo(x+side*(ew/2+4),y-eh/2+eh*0.38); ctx.closePath(); ctx.fill(); }
+  });
+  if(o.mouth!==false){
+    const my=cy+eh*0.5+16*sc;
+    ctx.strokeStyle=col; ctx.lineWidth=4*sc; ctx.lineCap="round"; ctx.beginPath();
+    if(mood==="happy"){ ctx.arc(cx,my-10*sc,20*sc,0.2*Math.PI,0.8*Math.PI); }
+    else if(mood==="angry"){ ctx.arc(cx,my+16*sc,20*sc,1.2*Math.PI,1.8*Math.PI); }
+    else{ ctx.moveTo(cx-16*sc,my+4*sc); ctx.quadraticCurveTo(cx-8*sc,my-2*sc,cx,my+4*sc); ctx.quadraticCurveTo(cx+8*sc,my+10*sc,cx+16*sc,my+4*sc); }
+    ctx.stroke();
+  }
+}
+function header(now){
+  ctx.fillStyle="#0f151c"; ctx.fillRect(0,0,W,20);
+  txt("DASHIE",8,14,11,accent(),"left","700");
+  txt(SCREENS[S.screen].toUpperCase(),W/2,14,10,DIM,"center","600");
+  const d=new Date(); txt(d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0"),W-8,14,11,FG,"right","600");
+  const net=$("netSel").value;
+  ctx.strokeStyle=net==="nowifi"?"#ff5d5d":"#46d17a"; ctx.lineWidth=2;
+  for(let i=1;i<=3;i++){ ctx.beginPath(); ctx.arc(W-52,15,i*3.2,-Math.PI*0.85,-Math.PI*0.15); ctx.stroke(); }
+  ctx.fillStyle=S.set.wake?"#46d17a":"#6b7886"; ctx.beginPath(); ctx.arc(W-72,10,3,0,7); ctx.fill();
+  ctx.fillRect(W-74,12,4,2);
+}
+function footer(a,b,c){
+  ctx.fillStyle="#0f151c"; ctx.fillRect(0,H-22,W,22);
+  txt(a,W/6,H-7,10,DIM,"center","700"); txt(b,W/2,H-7,10,DIM,"center","700"); txt(c,W*5/6,H-7,10,DIM,"center","700");
+}
+function drawIdleFace(now){
+  const idleMs=now-S.lastTouch;
+  const mood=currentMood(now);
+  const st=S.state;
+  let big=1,ly=0,conf=false,look=true;
+  if(now>S.blinkAt&&S.blinkT<0){ S.blinkT=now; S.blinkAt=now+2000+Math.random()*3500; }
+  if(now>S.lookAt){ S.lookAt=now+1800+Math.random()*2500; S.lookTX=(Math.random()-0.5)*16; S.lookTY=(Math.random()-0.5)*8; }
+  S.lookX+=(S.lookTX-S.lookX)*0.06; S.lookY+=(S.lookTY-S.lookY)*0.06;
+  if(st==="LISTEN"){ big=1.18; look=false; const p=((now-S.stateT)/400); ctx.strokeStyle=accent(); ctx.lineWidth=3; ctx.globalAlpha=1-p*0.6; ctx.beginPath(); ctx.arc(W/2,106,70+p*40,0,7); ctx.stroke(); ctx.globalAlpha=1; }
+  if(st==="THINK"){ look=false; ly=-12; }
+  if(st==="ERROR"){ conf=true; look=false; }
+  if(st==="REPLY"||st==="RECORD"){
+    drawFace(W/2,56,0.5,st==="RECORD"?"happy":mood==="angry"?"worried":"happy",{eh:62,mouth:false,look:false});
+  }else drawFace(W/2,104,1,st==="ERROR"?"worried":st==="LISTEN"?"happy":mood,{big,ly,confused:conf,look,eh:70});
+  if(st==="IDLE"){
+    const d=new Date(); txt(d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0"),W/2,196,22,FG,"center","700");
+    txt(S.set.wake?"say \"HEY!\" twice  ·  or press A":"press A to talk",W/2,212,10,DIM,"center","600");
+  }
+  if(st==="LISTEN") txt("LISTENING",W/2,200,14,accent(),"center","700");
+  if(st==="THINK"){ const n=Math.floor(now/250)%4; for(let i=0;i<3;i++){ ctx.fillStyle=i<n?accent():"#2a3541"; ctx.beginPath(); ctx.arc(W/2-20+i*20,196,5,0,7); ctx.fill(); } txt("THINKING",W/2,214,10,DIM,"center","700"); }
+  if(st==="ERROR") txt(S.errMsg,W/2,200,15,"#ff7a7a","center","700");
+  if(st==="RECORD"){
+    const rec=Math.floor(now/400)%2; ctx.fillStyle=rec?"#ff5d5d":"#5a2a2a"; ctx.beginPath(); ctx.arc(24,50,6,0,7); ctx.fill();
+    txt("REC "+((now-S.recStart)/1000).toFixed(1)+"s",38,54,11,FG,"left","700");
+    const L=S.recLevels, bw=4, n=Math.min(L.length,64);
+    for(let i=0;i<n;i++){ const v=clamp((L[L.length-n+i]-S.floor)/30,0.04,1); const h=v*70; ctx.fillStyle=accent(); ctx.fillRect(W/2-n*bw/2+i*bw,160-h/2+20,bw-1,h); }
+    txt(S.speechHeard?"speech detected":"waiting for speech…",W/2,216,10,DIM,"center","600");
+  }
+  if(st==="REPLY"){
+    ctx.fillStyle="#131b24"; rr(12,86,W-24,118,12); ctx.fill();
+    const lines=wrap(S.reply,W-56,15), lh=20, vis=4, tot=lines.length;
+    const el=(now-S.stateT)/1000, off=tot>vis?Math.floor(clamp(el/2.2-0.6,0,tot-vis)):0;
+    lines.slice(off,off+vis).forEach((l,i)=>txt(l,W-28,112+i*lh,15,FG,"right","500","rtl"));
+    const left=Math.ceil(8-el); txt("back in "+left+"s",W-18,198,9,DIM,"right","600");
+    if(tot>vis) txt(`${off+1}/${tot-vis+1}`,18,198,9,DIM,"left","600");
+  }
+  footer(st==="IDLE"?"WAKE":st==="RECORD"?"STOP":"OK","SCREEN","MOOD");
+  // auto dim
+  if(st==="IDLE"&&idleMs>20000){ ctx.fillStyle="rgba(0,0,0,.6)"; ctx.fillRect(0,0,W,H); }
+}
+function drawNoise(now){
+  const l=S.level, m=moodFromLevel(l);
+  const col=l<60?"#46d17a":l<75?"#ffcf4a":"#ff5d5d";
+  txt(Math.round(l).toString(),22,92,58,col,"left","700"); txt("dB",118,92,16,DIM,"left","700");
+  txt("CABIN NOISE",24,40,10,DIM,"left","700");
+  drawFace(250,66,0.34,m,{eh:66,mouth:true});
+  // histogram
+  const x0=14,y0=196,bh=70; ctx.fillStyle="#111820"; ctx.fillRect(x0-4,y0-bh-6,W-2*x0+8,bh+10);
+  [60,75].forEach(t=>{ const y=y0-(t-30)/70*bh; ctx.strokeStyle=t===60?"#2e6b46":"#6b5a22"; ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(x0-4,y); ctx.lineTo(W-x0+4,y); ctx.stroke(); ctx.setLineDash([]); txt(String(t),W-x0+2,y-2,8,DIM,"right","600"); });
+  const bw=(W-2*x0)/60;
+  S.hist.forEach((v,i)=>{ const h=clamp((v-30)/70,0.02,1)*bh; ctx.fillStyle=v<60?"#46d17a":v<75?"#ffcf4a":"#ff5d5d"; ctx.fillRect(x0+(60-S.hist.length+i)*bw,y0-h,bw-1,h); });
+  txt("60s",x0,y0+0,8,DIM,"left","600");
+  txt("QUIET "+S.quietSec+"s",160,92,13,FG,"left","700"); txt("BEST "+S.bestQuiet+"s",160,110,11,DIM,"left","600");
+  footer("WAKE","SCREEN","RESET");
+}
+function drawG(now){
+  const cx=100,cy=122,R=76,k=60;
+  ctx.fillStyle="#111820"; ctx.beginPath(); ctx.arc(cx,cy,R,0,7); ctx.fill();
+  ctx.strokeStyle="#26323f"; ctx.lineWidth=1;
+  [0.5,1].forEach(g=>{ ctx.beginPath(); ctx.arc(cx,cy,g*k,0,7); ctx.stroke(); });
+  ctx.beginPath(); ctx.moveTo(cx-R,cy); ctx.lineTo(cx+R,cy); ctx.moveTo(cx,cy-R); ctx.lineTo(cx,cy+R); ctx.stroke();
+  ctx.strokeStyle="#6b5a22"; ctx.setLineDash([3,3]); ctx.beginPath(); ctx.arc(cx,cy,0.45*k,0,7); ctx.stroke(); ctx.setLineDash([]);
+  let bx=S.ax*k, by=S.ay*k; const bl=Math.hypot(bx,by); if(bl>R-8){ bx*=(R-8)/bl; by*=(R-8)/bl; }
+  const g=Math.hypot(S.ax,S.ay);
+  ctx.fillStyle=g>0.45?"#ff5d5d":accent(); ctx.shadowColor=ctx.fillStyle; ctx.shadowBlur=12; ctx.beginPath(); ctx.arc(cx+bx,cy+by,9,0,7); ctx.fill(); ctx.shadowBlur=0;
+  txt("BRAKE",cx,cy+R-4,8,DIM,"center","600"); txt("ACCEL",cx,cy-R+10,8,DIM,"center","600");
+  const x=196; txt("G NOW",x,50,10,DIM,"left","700"); txt(g.toFixed(2),x,78,26,FG,"left","700");
+  txt("MAX",x,102,10,DIM,"left","700"); txt(S.gmax.toFixed(2)+"g",x,122,16,accent(),"left","700");
+  txt("BRAKES  "+S.trip.brakes,x,150,12,FG,"left","700"); txt("TURNS   "+S.trip.turns,x,170,12,FG,"left","700");
+  txt(driving()?"DRIVING "+S.speed+" km/h":"PARKED",x,196,10,driving()?"#46d17a":DIM,"left","700");
+  footer("WAKE","SCREEN","RESET MAX");
+}
+function fmtT(s){ s=Math.floor(s); return [Math.floor(s/3600),Math.floor(s/60)%60,s%60].map(n=>String(n).padStart(2,"0")).join(":"); }
+function drawTrip(now){
+  const t=S.trip;
+  txt("TRIP",20,44,10,DIM,"left","700"); txt(fmtT(t.time),W/2,96,42,FG,"center","700");
+  const rows=[["Distance",t.dist.toFixed(2)+" km"],["Hard brakes",String(t.brakes)],["Sharp turns",String(t.turns)],["Max G",t.gmax.toFixed(2)+"g"],["Avg noise",(t.noiseN?t.noiseSum/t.noiseN:0).toFixed(0)+" dB"]];
+  rows.forEach((r,i)=>{ const y=128+i*18; txt(r[0],34,y,12,DIM,"left","600"); txt(r[1],W-34,y,13,i===1&&t.brakes>3?"#ff7a7a":FG,"right","700"); ctx.fillStyle="#1a232d"; ctx.fillRect(30,y+5,W-60,1); });
+  footer("WAKE","SCREEN","RESET");
+}
+function drawSettings(now){
+  const st=S.set, vals=[Math.round(st.bright*20)+"%", st.vol===0?"MUTE":"▮".repeat(st.vol), SENS[st.sens][0], COLORS[st.color][0], st.wake?"ON":"OFF"];
+  txt("SETTINGS",20,44,10,DIM,"left","700");
+  SETTINGS.forEach((n,i)=>{ const y=60+i*30, sel=i===S.setSel;
+    ctx.fillStyle=sel?"#1b2733":"#10161d"; rr(14,y,W-28,24,8); ctx.fill();
+    if(sel){ ctx.strokeStyle=accent(); ctx.lineWidth=2; rr(14,y,W-28,24,8); ctx.stroke(); }
+    txt(n,26,y+16,13,sel?FG:DIM,"left","700"); txt(vals[i],W-26,y+16,13,accent(),"right","700"); });
+  footer("ITEM","SCREEN","CHANGE");
+}
+function drawCrash(now){
+  const left=15-(now-S.crash.t0)/1000, flash=Math.floor(now/300)%2;
+  ctx.fillStyle=flash?"#8f1010":"#5a0a0a"; ctx.fillRect(0,0,W,H);
+  if(S.crash.sos){ txt("SOS",W/2,98,56,"#fff","center","700"); txt("CALL EMERGENCY",W/2,134,18,"#fff","center","700"); txt("112 / 101",W/2,160,16,"#ffd0d0","center","700"); }
+  else{
+    txt("IMPACT DETECTED",W/2,52,20,"#fff","center","700"); txt("Are you OK?",W/2,82,18,"#ffd0d0","center","700");
+    txt(Math.ceil(left).toString(),W/2,152,64,"#fff","center","700");
+    ctx.fillStyle="rgba(255,255,255,.25)"; ctx.fillRect(30,172,W-60,8); ctx.fillStyle="#fff"; ctx.fillRect(30,172,(W-60)*clamp(left/15,0,1),8);
+  }
+  txt("TAP / A = I'M OK",W/2,214,13,"#fff","center","700");
+}
+function draw(now){
+  ctx.fillStyle=BG; ctx.fillRect(0,0,W,H);
+  if(S.crash){ drawCrash(now); }
+  else{
+    header(now);
+    [drawIdleFace,drawNoise,drawG,drawTrip,drawSettings][S.screen](now);
+  }
+  const dark=1-clamp(S.set.bright/5,0.2,1); if(dark>0){ ctx.fillStyle="rgba(0,0,0,"+(dark*0.8)+")"; ctx.fillRect(0,0,W,H); }
+}
+
+/* ---------- live meter canvas ---------- */
+const mc=$("meter"), mx=mc.getContext("2d");
+function cssv(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function drawMeter(){
+  const w=mc.width,h=mc.height; mx.clearRect(0,0,w,h);
+  const lo=30,hi=110, Y=v=>h-6-(clamp(v,lo,hi)-lo)/(hi-lo)*(h-12);
+  mx.strokeStyle=cssv("--line"); mx.lineWidth=1; mx.font="16px monospace"; mx.fillStyle=cssv("--muted"); mx.textAlign="left";
+  [40,60,80,100].forEach(v=>{ mx.beginPath(); mx.moveTo(0,Y(v)); mx.lineTo(w,Y(v)); mx.stroke(); mx.fillText(v,4,Y(v)-3); });
+  const n=S.samples.length; if(!n) return;
+  const X=i=>(i/199)*w+(w-(n-1)/199*w)*0; const off=200-n;
+  const line=(idx,color,wd)=>{ mx.strokeStyle=color; mx.lineWidth=wd; mx.beginPath(); S.samples.forEach((s,i)=>{ const x=(off+i)/199*w, y=Y(s[idx]); i?mx.lineTo(x,y):mx.moveTo(x,y); }); mx.stroke(); };
+  line(1,cssv("--good"),2); line(2,cssv("--bad"),2); line(0,cssv("--info"),3);
+}
+function updateReadouts(now){
+  $("rLvl").textContent=S.level.toFixed(0); $("rFloor").textContent=S.floor.toFixed(0); $("rThr").textContent=S.thr.toFixed(0);
+  $("rBurst").textContent=S.bursts.length+"/2";
+  const r=S.refr-now; $("rRef").textContent=r>0?(r/1000).toFixed(1)+"s":"–";
+}
+
+/* ---------- loop ---------- */
+let last=performance.now(), uiAcc=0;
+function tick(now){
+  const dt=Math.min(now-last,100); last=now;
+  sampleLevel(now,dt); updateTrigger(now,dt); updateIMU(now,dt); updateFSM(now); updateStats(now,dt);
+  draw(now); uiAcc+=dt; if(uiAcc>66){ uiAcc=0; drawMeter(); updateReadouts(now); }
+  requestAnimationFrame(tick);
+}
+try{ const t=JSON.parse(localStorage.getItem("dashie.trip")||"null"); if(t&&typeof t.time==="number") S.trip=t; }catch(e){}
+S.floor=+$("noise").value; S.level=S.floor;
+log("Dashie boot · Core2 · IMU MPU6886 · mic PDM 16kHz","s"); log("הפעלה: לחץ A, או לחץ פעמיים על 'אין מיקרופון, סמלץ'","t");
+$("pDrive").textContent="בנסיעה";
+requestAnimationFrame(tick);
+window.__dashie={S,press,wake:()=>wake("test",performance.now()),impulse};
+})();
+</script>
+</body>
+</html>
