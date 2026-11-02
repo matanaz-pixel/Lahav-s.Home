@@ -1,0 +1,8 @@
+{
+  "type": 305,
+  "lang": "he",
+  "currency": "ILS",
+  "vatType": 0,
+  "client": { "name": "לקוח לדוגמה", "emails": ["client@example.com"], "add": false },
+  "income": [{ "description": "שירות לדוגמה", "quantity": 1, "price": 100, "currency": "ILS", "vatType": 1 }]
+}
