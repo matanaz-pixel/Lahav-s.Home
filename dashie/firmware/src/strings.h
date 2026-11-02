@@ -22,6 +22,7 @@ enum StrId : uint8_t {
   S_BRIGHT, S_VOLUME, S_SENS, S_THEME, S_VOICE, S_LANG,
   S_LOW, S_MED, S_HIGH, S_ON, S_OFF, S_CYAN, S_AMBER, S_GREEN,
   S_LANG_EN, S_LANG_HE, S_LANG_HE_NOFONT,
+  S_TESTKIT, S_BT_IDLE, S_BT_CONN, S_BT_OK, S_BT_NF, S_BT_TO, S_BT_MEM, S_BT_FAIL, S_BT_PICK, S_BT_NODEV, S_BACK, S_PICK,
   S_COUNT
 };
 
@@ -77,6 +78,18 @@ static const StrRow kStrings[S_COUNT] = {
   /* S_LANG_EN */ {"English", "English"},
   /* S_LANG_HE */ {"עברית", "עברית"},
   /* S_LANG_HE_NOFONT */ {"Hebrew (no font)", "Hebrew (no font)"},
+  /* S_TESTKIT */ {"Test kit", "בדיקת דיבורית"},
+  /* S_BT_IDLE */ {"Press OPT", "לחץ שנה"},
+  /* S_BT_CONN */ {"Connecting...", "מתחבר..."},
+  /* S_BT_OK */ {"Connected", "מחובר"},
+  /* S_BT_NF */ {"Not found", "לא נמצאה"},
+  /* S_BT_TO */ {"Timeout", "תם הזמן"},
+  /* S_BT_MEM */ {"Low memory", "אין זיכרון"},
+  /* S_BT_FAIL */ {"Failed", "נכשל"},
+  /* S_BT_PICK */ {"Pick your kit", "בחר דיבורית"},
+  /* S_BT_NODEV */ {"None found. Pairing mode?", "לא נמצא. מצב צימוד?"},
+  /* S_BACK */ {"BACK", "חזור"},
+  /* S_PICK */ {"PICK", "בחר"},
 };
 
 enum Lang : uint8_t { LANG_EN = 0, LANG_HE = 1 };

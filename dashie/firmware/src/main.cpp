@@ -16,6 +16,9 @@
 #include "rtl.h"
 #include "trigger.h"
 #include "face.h"
+#ifdef USE_A2DP_OUT
+#include "a2dp_out.h"
+#endif
 
 #ifdef HAVE_HE_FONT
 #include "font_he.h"   // must define: const uint8_t font_he_vlw[] PROGMEM = {...};
@@ -40,7 +43,11 @@ static const float SENS_DB[3] = {15.0f, 12.0f, 9.0f};
 
 struct Settings { uint8_t bright = 1, vol = 2, sens = 1, theme = 0; bool voice = true; } cfg;
 struct Trip { uint32_t secs = 0, brakes = 0, turns = 0, noiseN = 0; float maxG = 0, noiseSum = 0; } trip;
+#ifdef USE_A2DP_OUT
+static constexpr int SET_ITEMS = 7;    // + "Test kit"
+#else
 static constexpr int SET_ITEMS = 6;
+#endif
 
 static M5Canvas cv(&M5.Display);
 static Preferences prefs;
@@ -98,6 +105,25 @@ static uint32_t replySince = 0;
 // playback
 static uint8_t* playBuf = nullptr; static size_t playLen = 0, playDataOff = 44, playDataLen = 0;
 static uint32_t playRate = 16000, playStart = 0; static float mouthOpen = 0;
+#ifdef USE_A2DP_OUT
+static bool viaBt = false;                       // current reply is going out over A2DP
+static uint8_t* deferFree = nullptr;             // buffer still read by the A2DP task; freed when it ends
+static bool testRunning = false, btPicking = false; static a2o::Res testRes = a2o::Res::NONE; static int pickSel = 0;
+#endif
+
+// "Is a reply being played (keep the buffer, stay in REPLY)?" vs "is sound coming out right now (mouth)?"
+static bool audioActive() {
+#ifdef USE_A2DP_OUT
+  if (viaBt) return a2o::busy();
+#endif
+  return M5.Speaker.isPlaying();
+}
+static bool audioSounding() {
+#ifdef USE_A2DP_OUT
+  if (viaBt) return a2o::streaming();
+#endif
+  return M5.Speaker.isPlaying();
+}
 
 // ----------------------------------------------------------------------------
 // Network job (runs in its own task so the face keeps animating)
@@ -371,6 +397,14 @@ static void loadPrefs() {
 static void setSt(St s, uint32_t now) { st = s; stSince = now; }
 
 static void stopPlayback() {
+#ifdef USE_A2DP_OUT
+  if (viaBt || a2o::busy()) {                    // the A2DP task still reads playBuf: free it after it ends
+    a2o::abort(); viaBt = false;
+    if (playBuf) { if (deferFree) heap_caps_free(deferFree); deferFree = playBuf; playBuf = nullptr; }
+    mouthOpen = 0;
+    return;
+  }
+#endif
   if (M5.Speaker.isEnabled()) M5.Speaker.stop();
   if (playBuf) { heap_caps_free(playBuf); playBuf = nullptr; }
   mouthOpen = 0;
@@ -459,10 +493,18 @@ static void startReply(uint32_t now) {
       }
     }
     uint32_t sr; memcpy(&sr, playBuf + 24, 4); if (sr >= 8000 && sr <= 48000) playRate = sr;
-    audSpk();
-    M5.Speaker.setVolume(VOL_LV[cfg.vol]);
-    M5.Speaker.playWav(playBuf, playLen);
-    playStart = millis();
+    bool onBt = false;
+#ifdef USE_A2DP_OUT
+    uint16_t ch, bits; memcpy(&ch, playBuf + 22, 2); memcpy(&bits, playBuf + 34, 2);
+    if (ch == 1 && bits == 16 && playDataLen >= 3200 && !a2o::busy())
+      onBt = viaBt = a2o::play((const int16_t*)(playBuf + playDataOff), playDataLen / 2, playRate);
+#endif
+    if (!onBt) {
+      audSpk();
+      M5.Speaker.setVolume(VOL_LV[cfg.vol]);
+      M5.Speaker.playWav(playBuf, playLen);
+      playStart = millis();
+    }
   }
   if (strcmp(job.action, "beep") == 0) beep(1800, 120);
   job.status = 0;
@@ -480,6 +522,9 @@ static void changeSetting(uint32_t now) {
     case 3: cfg.theme = (cfg.theme + 1) % 3; break;
     case 4: cfg.voice = !cfg.voice; break;
     case 5: g_lang = (g_lang == LANG_EN) ? LANG_HE : LANG_EN; break;
+#ifdef USE_A2DP_OUT
+    case 6: if (a2o::test()) { testRunning = true; testRes = a2o::Res::NONE; } break;
+#endif
   }
   saveSettings();
 }
@@ -500,6 +545,18 @@ static void onAction(char which, uint32_t now) {
     case St::THINK: return;
     case St::IDLE: break;
   }
+#ifdef USE_A2DP_OUT
+  if (screen == SC_SET && btPicking) {          // scan list: A next, B back, C pick
+    int n = a2o::foundCount();
+    if (which == 'A' && n) pickSel = (pickSel + 1) % n;
+    else if (which == 'B') btPicking = false;
+    else if (which == 'C' && n) {
+      a2o::selectFound(pickSel); btPicking = false;
+      if (a2o::test()) { testRunning = true; testRes = a2o::Res::NONE; }
+    }
+    return;
+  }
+#endif
   if (which == 'B') { screen = (Screen)((screen + 1) % SC_COUNT); return; }
   if (which == 'A' || which == 'T') {
     if (screen == SC_SET) { if (which == 'A') setSel = (setSel + 1) % SET_ITEMS; return; }
@@ -722,10 +779,29 @@ static void renderScreen(uint32_t now) {
       break;
     }
     case SC_SET: {
-      static const StrId labels[SET_ITEMS] = {S_BRIGHT, S_VOLUME, S_SENS, S_THEME, S_VOICE, S_LANG};
+#ifdef USE_A2DP_OUT
+      if (btPicking) {                            // scan results: pick the kit
+        say(ui(S_BT_PICK), 160, 6, AL_C, 2, k.acc);
+        int n = a2o::foundCount();
+        if (!n) say(ui(S_BT_NODEV), 160, 100, AL_C, 2, k.fg);
+        for (int i = 0; i < n; i++) {
+          int y = 34 + i * 22;
+          if (i == pickSel) cv.drawRoundRect(2, y - 3, 316, 21, 5, k.acc);
+          say(a2o::foundName(i), 10, y, AL_L, 1, i == pickSel ? k.acc : k.fg);
+        }
+        bottomBar(S_NEXT, S_BACK, S_PICK);
+        break;
+      }
+#endif
+      static const StrId labels[SET_ITEMS] = {S_BRIGHT, S_VOLUME, S_SENS, S_THEME, S_VOICE, S_LANG
+#ifdef USE_A2DP_OUT
+        , S_TESTKIT
+#endif
+      };
+      const int pitch = SET_ITEMS > 6 ? 28 : 33;
       for (int i = 0; i < SET_ITEMS; i++) {
-        int y = 10 + i * 33;
-        if (i == setSel) cv.drawRoundRect(2, y - 5, 316, 30, 6, k.acc);
+        int y = 10 + i * pitch;
+        if (i == setSel) cv.drawRoundRect(2, y - 5, 316, pitch - 3, 6, k.acc);
         String v;
         switch (i) {
           case 0: v = String(BRIGHT_LV[cfg.bright] * 100 / 255) + "%"; break;
@@ -740,6 +816,22 @@ static void renderScreen(uint32_t now) {
             v = g_lang == LANG_HE ? kStrings[S_LANG_HE_NOFONT].en : kStrings[S_LANG_EN].en;
 #endif
             break;
+#ifdef USE_A2DP_OUT
+          case 6: {
+            StrId id = S_BT_IDLE;
+            if (testRunning) id = S_BT_CONN;
+            else switch (testRes) {
+              case a2o::Res::OK: id = S_BT_OK; break;
+              case a2o::Res::NOT_FOUND: id = S_BT_NF; break;
+              case a2o::Res::TIMEOUT: id = S_BT_TO; break;
+              case a2o::Res::NO_MEM: id = S_BT_MEM; break;
+              case a2o::Res::FAIL: id = S_BT_FAIL; break;
+              default: break;
+            }
+            v = ui(id);
+            break;
+          }
+#endif
         }
         row(y, ui(labels[i]), v, i == setSel ? k.acc : k.fg, k.fg);
       }
@@ -775,7 +867,7 @@ static void renderOverlay(uint32_t now) {
       say(ui(S_THINKING), 160, 196, AL_C, 2, k.acc);
       break;
     case St::REPLY: {
-      bool speaking = playBuf && M5.Speaker.isPlaying();
+      bool speaking = playBuf && audioSounding();
       drawFace(cv, 160, 46, 0.5f, speaking ? Mood::TALK : replyMood, now, k, mouthOpen);
       int lineH = replyHeFont || heActive() ? 24 : 18;
       int vis = (210 - 100) / lineH;
@@ -855,6 +947,13 @@ void setup() {
 void loop() {
   M5.update();
   uint32_t now = millis();
+#ifdef USE_A2DP_OUT
+  if (deferFree && !a2o::busy()) { heap_caps_free(deferFree); deferFree = nullptr; }
+  if (testRunning && !a2o::busy()) {
+    testRunning = false; testRes = a2o::result();
+    if (testRes == a2o::Res::NOT_FOUND && screen == SC_SET) { btPicking = true; pickSel = 0; }   // show what the scan saw
+  }
+#endif
   handleInput(now);
 
   const int16_t* f = nullptr;
@@ -871,16 +970,30 @@ void loop() {
       else if (now - stSince > 20000) { job.orphan = true; toError(S_ERR_BRIDGE, now); }
       break;
     case St::REPLY: {
-      bool speaking = playBuf && M5.Speaker.isPlaying();
+#ifdef USE_A2DP_OUT
+      if (viaBt && !a2o::busy()) {                 // A2DP session ended
+        viaBt = false;
+        if (a2o::result() != a2o::Res::OK && playBuf) {   // kit not reachable: use the internal speaker
+          audSpk();
+          M5.Speaker.setVolume(VOL_LV[cfg.vol]);
+          M5.Speaker.playWav(playBuf, playLen);
+          playStart = now;
+        }
+      }
+#endif
+      bool speaking = playBuf && audioActive();
       if (speaking) {
         // mouth follows the loudness of the audio being played
         size_t idx = (size_t)(now - playStart) * playRate / 1000;
+#ifdef USE_A2DP_OUT
+        if (viaBt) idx = a2o::played();
+#endif
         size_t total = playDataLen / 2;
         const int16_t* pcm = (const int16_t*)(playBuf + playDataOff);
         double s2 = 0; int n = 0;
         for (size_t i = idx; i < idx + 240 && i < total; i++) { s2 += (double)pcm[i] * pcm[i]; n++; }
         float rmsv = n ? sqrtf((float)(s2 / n)) : 0;
-        float target = constrain(rmsv / 5000.0f, 0.0f, 1.0f);
+        float target = audioSounding() ? constrain(rmsv / 5000.0f, 0.0f, 1.0f) : 0.0f;
         mouthOpen += (target - mouthOpen) * 0.5f;
       } else {
         mouthOpen = 0;

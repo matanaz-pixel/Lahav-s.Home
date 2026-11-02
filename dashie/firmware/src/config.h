@@ -28,6 +28,32 @@
 #define DB_OFFSET 10.0f
 #endif
 
+// ---- A2DP output to the car hands-free kit (env core2_a2dp only; needs Bluetooth Classic) ----
+// Bluetooth name of the kit as seen in a scan. Unknown? Put the kit in pairing mode, open
+// Settings > Test kit; if the name is not found Dashie lists the devices it saw and you pick one.
+// The picked name is stored in Preferences and overrides this value.
+#ifndef A2DP_TARGET_NAME
+#define A2DP_TARGET_NAME "MyCarKit"
+#endif
+#ifndef A2DP_CONNECT_TIMEOUT_MS
+#define A2DP_CONNECT_TIMEOUT_MS 6000
+#endif
+#ifndef A2DP_SCAN_MS                       // discovery time of a Test-kit run (fills the pick list)
+#define A2DP_SCAN_MS 13000
+#endif
+#ifndef A2DP_STREAM_START_TIMEOUT_MS       // after "connected": wait for the media stream to start
+#define A2DP_STREAM_START_TIMEOUT_MS 8000
+#endif
+#ifndef A2DP_MIN_FREE_HEAP                 // internal RAM needed before bringing up Bluetooth (bytes).
+#define A2DP_MIN_FREE_HEAP 90000           // A guess: read the serial log ("a2dp: free internal") and tune.
+#endif
+#ifndef A2DP_GAIN_Q15                      // output gain (Q15, 22000 ~ 0.67) = headroom against clipping
+#define A2DP_GAIN_Q15 22000
+#endif
+#ifndef A2DP_RELEASE_BLE                   // 1 = esp_bt_controller_mem_release(BLE) before first start.
+#define A2DP_RELEASE_BLE 0                 // OFF: the prebuilt Arduino core runs BTDM, unverified on hardware
+#endif
+
 // Uncomment to enable an Edge Impulse keyword model (see trigger.h).
 // #define USE_EI_KWS
 
