@@ -24,6 +24,8 @@ enum StrId : uint8_t {
   S_LANG_EN, S_LANG_HE, S_LANG_HE_NOFONT,
   S_TESTKIT, S_BT_IDLE, S_BT_CONN, S_BT_OK, S_BT_NF, S_BT_TO, S_BT_MEM, S_BT_FAIL, S_BT_PICK, S_BT_NODEV, S_BACK, S_PICK,
   S_SET, S_CHANGE, S_PRESSCANCEL, S_BT_IDLE_BTN,   // button-only boards (Plus2)
+  // shift mode
+  S_SHIFT, S_START, S_READ, S_NOTE, S_END, S_SH_NONE, S_SH_HOLDA, S_SH_HINT_CORE, S_SH_HINT_STICK, S_SH_NOTES, S_SH_QUEUE, S_SH_BATT, S_SH_STORE, S_SH_LAST, S_SH_READY, S_SH_NOLAST, S_SH_OFFLINE, S_SH_LOWSTORE, S_SH_WRITEERR, S_SH_LOWBATT, S_SH_SUMREADY, S_REC_NOTE, S_ENDQ, S_ENDQ_CORE, S_ENDQ_STICK, S_Q1, S_Q2, S_Q3, S_Q4, S_Q_HINT_CORE, S_Q_HINT_STICK, S_SENDING, S_SUMMARIZING, S_SAVED_OFFLINE, S_ERR_NOSTORE, S_NO_SUMMARY,
   S_COUNT
 };
 
@@ -95,6 +97,42 @@ static const StrRow kStrings[S_COUNT] = {
   /* S_CHANGE */ {"CHANGE", "שנה"},
   /* S_PRESSCANCEL */ {"Press A to cancel", "לחץ A לביטול"},
   /* S_BT_IDLE_BTN */ {"Press B", "לחץ B"},
+  /* S_SHIFT */ {"Shift", "משמרת"},
+  /* S_START */ {"START", "התחל"},
+  /* S_READ */ {"READ", "הקרא"},
+  /* S_NOTE */ {"NOTE", "הערה"},
+  /* S_END */ {"END", "סיים"},
+  /* S_SH_NONE */ {"No shift running", "אין משמרת פעילה"},
+  /* S_SH_HOLDA */ {"Hold A to start", "החזק A להתחלה"},
+  /* S_SH_HINT_CORE */ {"Side btn: note, hold: end", "צד: הערה, החזק: סיום"},
+  /* S_SH_HINT_STICK */ {"A: note, hold A: end", "A: הערה, החזק A: סיום"},
+  /* S_SH_NOTES */ {"Notes", "הערות"},
+  /* S_SH_QUEUE */ {"To upload", "להעלאה"},
+  /* S_SH_BATT */ {"Battery", "סוללה"},
+  /* S_SH_STORE */ {"Storage", "אחסון"},
+  /* S_SH_LAST */ {"Last summary", "סיכום אחרון"},
+  /* S_SH_READY */ {"ready", "מוכן"},
+  /* S_SH_NOLAST */ {"none", "אין"},
+  /* S_SH_OFFLINE */ {"offline", "לא מחובר"},
+  /* S_SH_LOWSTORE */ {"Storage low!", "האחסון כמעט מלא!"},
+  /* S_SH_WRITEERR */ {"Write error!", "שגיאת כתיבה!"},
+  /* S_SH_LOWBATT */ {"Battery low!", "סוללה חלשה!"},
+  /* S_SH_SUMREADY */ {"Summary ready: READ", "סיכום מוכן: הקרא"},
+  /* S_REC_NOTE */ {"Note", "הערה"},
+  /* S_ENDQ */ {"End shift?", "לסיים משמרת?"},
+  /* S_ENDQ_CORE */ {"Click the side button", "לחץ על הכפתור הצדדי"},
+  /* S_ENDQ_STICK */ {"Click A to confirm", "לחץ A לאישור"},
+  /* S_Q1 */ {"How did the line run?", "איך עבר הקו?"},
+  /* S_Q2 */ {"Any incidents?", "היו אירועים חריגים?"},
+  /* S_Q3 */ {"How was each station?", "איך כל עמדה?"},
+  /* S_Q4 */ {"How did I handle things?", "איך התנהלתי?"},
+  /* S_Q_HINT_CORE */ {"Side btn: answer, hold: skip", "צד: ענה, החזק: דלג"},
+  /* S_Q_HINT_STICK */ {"A: answer, hold A: skip", "A: ענה, החזק A: דלג"},
+  /* S_SENDING */ {"Sending notes...", "שולח הערות..."},
+  /* S_SUMMARIZING */ {"Summarizing...", "מכין סיכום..."},
+  /* S_SAVED_OFFLINE */ {"Saved. Sends when online", "נשמר. יישלח כשיש רשת"},
+  /* S_ERR_NOSTORE */ {"No storage", "אין אחסון"},
+  /* S_NO_SUMMARY */ {"No summary yet", "אין סיכום עדיין"},
 };
 
 enum Lang : uint8_t { LANG_EN = 0, LANG_HE = 1 };

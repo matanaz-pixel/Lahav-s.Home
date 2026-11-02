@@ -90,3 +90,36 @@
 #define TURN_G          0.45f
 #define CRASH_G         4.0f
 #define CRASH_COUNTDOWN_S 15
+
+// ---------------------------------------------------------------------------
+// Shift mode (end-of-shift summary). See ../../SPEC_SHIFT.md and README "Shift mode".
+// Build with -DSHIFT_ENABLED=0 to compile it out completely (behaviour is then identical to before).
+// ---------------------------------------------------------------------------
+#ifndef SHIFT_ENABLED
+#define SHIFT_ENABLED 1
+#endif
+// Bearer token sent to the bridge (must equal BRIDGE_TOKEN on the server). Empty = no Authorization header.
+#ifndef SHIFT_BRIDGE_TOKEN
+#define SHIFT_BRIDGE_TOKEN ""
+#endif
+// Bridge origin for /shift/* (e.g. "http://192.168.43.10:8787"). Empty = derived from BRIDGE_URL.
+#ifndef SHIFT_BRIDGE_BASE
+#define SHIFT_BRIDGE_BASE ""
+#endif
+#ifndef SHIFT_NOTE_MAX_S                   // a note stops by itself after this long
+#define SHIFT_NOTE_MAX_S 90
+#endif
+#ifndef SHIFT_NOTE_MIN_MS                  // shorter presses are discarded (accidents / "peek" double press)
+#define SHIFT_NOTE_MIN_MS 1000
+#endif
+#ifndef SHIFT_POCKET_MS                    // no input for this long during a shift => screen off, touch ignored
+#define SHIFT_POCKET_MS 10000
+#endif
+#ifndef SHIFT_LOW_BATT_PCT
+#define SHIFT_LOW_BATT_PCT 20
+#endif
+#ifndef SHIFT_FINISH_WAIT_MS               // end of shift: how long the UI waits for the summary before detaching
+#define SHIFT_FINISH_WAIT_MS 60000
+#endif
+// Plus2 has no SD slot: notes are stored in LittleFS (custom partition table, see platformio.ini) at 8 kHz.
+// Core2 / CoreS3 store 16 kHz notes on the SD card (LittleFS fallback when no card is inserted).

@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>סיכום משמרת</title>
+<style>
+  :root { --bg:#f6f7f9; --fg:#14181f; --card:#fff; --mut:#5b6472; --line:#d9dde4; --acc:#0b6bcb; --rec:#c62828; --ok:#2e7d32; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1318; --fg:#e8ebf0; --card:#1a2028; --mut:#97a1b0; --line:#2c3541; --acc:#5aa9ff; --rec:#ef5350; --ok:#66bb6a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; }
+  main { max-width:560px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.3rem; margin:8px 0 4px; }
+  p.sub { color:var(--mut); margin:0 0 16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; }
+  label { display:block; font-size:.85rem; color:var(--mut); margin-bottom:4px; }
+  input { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:inherit; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  button { flex:1; min-height:48px; padding:10px 14px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--fg); font:inherit; font-weight:600; cursor:pointer; }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+  button.rec { background:var(--rec); border-color:var(--rec); color:#fff; }
+  button:disabled { opacity:.5; cursor:default; }
+  #status { min-height:1.5em; color:var(--mut); }
+  #log { margin:0; padding:0; list-style:none; font-size:.9rem; }
+  #log li { padding:4px 0; border-bottom:1px solid var(--line); }
+  #questions li { margin-bottom:6px; }
+  #summary { white-space:pre-wrap; font:inherit; margin:0; }
+  .hidden { display:none; }
+  .note { font-size:.8rem; color:var(--mut); }
+</style>
+</head>
+<body>
+<main>
+  <h1>סיכום משמרת</h1>
+  <p class="sub">הקלט הערות במהלך המשמרת, ובסוף קבל סיכום במייל.</p>
+
+  <div class="card">
+    <label for="token">מפתח גישה (BRIDGE_TOKEN, אם הוגדר)</label>
+    <input id="token" type="password" autocomplete="off">
+    <label for="sid" style="margin-top:10px">מזהה משמרת</label>
+    <input id="sid" dir="ltr">
+    <div class="row" style="margin-top:10px">
+      <button id="start" class="primary">התחל משמרת</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button id="rec">הקלט הערה</button>
+      <button id="finish">סיים משמרת</button>
+    </div>
+    <p id="status" role="status"></p>
+    <p class="note">הקלטה מתחילה רק בלחיצה, ונעצרת בלחיצה נוספת (או אחרי 90 שניות). אין האזנה ברקע.</p>
+  </div>
+
+  <div id="qcard" class="card hidden">
+    <strong>צריך עוד פרטים:</strong>
+    <ol id="questions"></ol>
+    <p class="note">הקלט תשובה (בלחיצה על "הקלט הערה"), ואז לחץ שוב על "סיים משמרת".</p>
+  </div>
+
+  <div id="scard" class="card hidden">
+    <strong>הסיכום</strong>
+    <pre id="summary"></pre>
+    <p id="delivered" class="note"></p>
+    <audio id="player" controls class="hidden" style="width:100%"></audio>
+  </div>
+
+  <div class="card">
+    <strong>הערות במשמרת</strong>
+    <ul id="log"></ul>
+    <div class="row" style="margin-top:8px"><button id="retry" class="hidden">נסה לשלוח שוב</button></div>
+  </div>
+
+  <p class="note">הקלטה בדפדפן דורשת חיבור HTTPS (או localhost). בטלפון מרשת מקומית ב-http המיקרופון ייחסם.</p>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var store = {
+    get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+  var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+  function localIso(d) {
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" +
+           pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+
+  var token = $("token"), sid = $("sid");
+  token.value = store.get("shift_token") || "";
+  sid.value = store.get("shift_id") ||
+    ("" + new Date().getFullYear() + pad(new Date().getMonth() + 1) + pad(new Date().getDate()) + "-" + pad(new Date().getHours()) + pad(new Date().getMinutes()));
+  var seq = parseInt(store.get("shift_seq_" + sid.value) || "0", 10);
+  var answerMode = false, pendingUpload = null;
+
+  function status(t) { $("status").textContent = t; }
+  function addLog(t) { var li = document.createElement("li"); li.textContent = t; $("log").appendChild(li); }
+  function headers(extra) {
+    var h = extra || {};
+    if (token.value) h["Authorization"] = "Bearer " + token.value;
+    store.set("shift_token", token.value);
+    store.set("shift_id", sid.value);
+    return h;
+  }
+
+  async function post(path, obj) {
+    var r = await fetch(path, { method: "POST", headers: headers({ "Content-Type": "application/json" }), body: JSON.stringify(obj) });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+    return j;
+  }
+
+  $("start").onclick = async function () {
+    try {
+      await post("/shift/start", { shift_id: sid.value, started_at: localIso(new Date()) });
+      store.set("shift_start_" + sid.value, localIso(new Date()));
+      status("המשמרת התחילה");
+    } catch (e) { status("שגיאה: " + e.message); }
+  };
+
+  // ---- הקלטה והמרה ל-WAV 16kHz מונו 16 ביט (הדפדפן מקליט webm/mp4, ה-bridge מצפה ל-WAV)
+  var mediaRec = null, chunks = [], stopTimer = null, stream = null;
+
+  async function toWav16k(blob) {
+    var buf = await blob.arrayBuffer();
+    var AC = window.AudioContext || window.webkitAudioContext;
+    var ctx = new AC();
+    var decoded = await new Promise(function (res, rej) { ctx.decodeAudioData(buf, res, rej); });
+    ctx.close();
+    var len = Math.ceil(decoded.duration * 16000);
+    var off = new OfflineAudioContext(1, len, 16000);
+    var src = off.createBufferSource();
+    src.buffer = decoded;
+    src.connect(off.destination);
+    src.start();
+    var rendered = await off.startRendering();
+    var pcm = rendered.getChannelData(0);
+    var out = new DataView(new ArrayBuffer(44 + pcm.length * 2));
+    function w(o, s) { for (var i = 0; i < s.length; i++) out.setUint8(o + i, s.charCodeAt(i)); }
+    w(0, "RIFF"); out.setUint32(4, 36 + pcm.length * 2, true); w(8, "WAVE"); w(12, "fmt ");
+    out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, 1, true);
+    out.setUint32(24, 16000, true); out.setUint32(28, 32000, true); out.setUint16(32, 2, true); out.setUint16(34, 16, true);
+    w(36, "data"); out.setUint32(40, pcm.length * 2, true);
+    for (var i = 0; i < pcm.length; i++) {
+      var s = Math.max(-1, Math.min(1, pcm[i]));
+      out.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+    return new Blob([out.buffer], { type: "audio/wav" });
+  }
+
+  async function upload(wav, mySeq, when, kind) {
+    var r = await fetch("/shift/note", {
+      method: "POST",
+      headers: headers({ "X-Shift-Id": sid.value, "X-Seq": String(mySeq), "X-Time": when, "X-Kind": kind }),
+      body: wav
+    });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+    return j;
+  }
+
+  async function sendPending() {
+    if (!pendingUpload) return;
+    var p = pendingUpload;
+    try {
+      var j = await upload(p.wav, p.seq, p.when, p.kind);
+      pendingUpload = null;
+      $("retry").classList.add("hidden");
+      addLog("הערה " + p.seq + " נשמרה" + (j.transcribed ? "" : " (תומלל בסיום)"));
+      status("נשמר");
+    } catch (e) {
+      $("retry").classList.remove("hidden");
+      status("השליחה נכשלה: " + e.message);
+    }
+  }
+  $("retry").onclick = sendPending;
+
+  $("rec").onclick = async function () {
+    if (mediaRec && mediaRec.state === "recording") { mediaRec.stop(); return; }
+    if (pendingUpload) { status("יש הערה שלא נשלחה. לחץ 'נסה לשלוח שוב'."); return; }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) { status("אין גישה למיקרופון (נדרש HTTPS)"); return; }
+    chunks = [];
+    mediaRec = new MediaRecorder(stream);
+    mediaRec.ondataavailable = function (ev) { if (ev.data.size) chunks.push(ev.data); };
+    mediaRec.onstop = async function () {
+      clearTimeout(stopTimer);
+      stream.getTracks().forEach(function (t) { t.stop(); });
+      $("rec").textContent = "הקלט הערה";
+      $("rec").classList.remove("rec");
+      status("מעבד...");
+      try {
+        var wav = await toWav16k(new Blob(chunks, { type: mediaRec.mimeType || "audio/webm" }));
+        seq += 1;
+        store.set("shift_seq_" + sid.value, String(seq));
+        pendingUpload = { wav: wav, seq: seq, when: localIso(new Date()), kind: answerMode ? "answer" : "note" };
+        await sendPending();
+      } catch (e) { status("שגיאה בעיבוד ההקלטה: " + e.message); }
+    };
+    mediaRec.start();
+    $("rec").textContent = "עצור הקלטה";
+    $("rec").classList.add("rec");
+    status("מקליט...");
+    stopTimer = setTimeout(function () { if (mediaRec.state === "recording") mediaRec.stop(); }, 90000);
+  };
+
+  // ---- סיום
+  var audioList = [], audioIdx = 0;
+  function playNext() {
+    var p = $("player");
+    if (audioIdx < audioList.length) { p.src = audioList[audioIdx++]; p.play().catch(function () {}); }
+  }
+  $("player").addEventListener("ended", playNext);
+
+  $("finish").onclick = async function () {
+    status("מכין סיכום (עד דקה)...");
+    $("finish").disabled = true;
+    try {
+      var j = await post("/shift/finish", { shift_id: sid.value, ended_at: localIso(new Date()) });
+      if (j.status === "need_info") {
+        answerMode = true;
+        var ol = $("questions"); ol.textContent = "";
+        j.questions.forEach(function (q) { var li = document.createElement("li"); li.textContent = q; ol.appendChild(li); });
+        $("qcard").classList.remove("hidden");
+        status("צריך עוד פרטים");
+      } else if (j.status === "done") {
+        answerMode = false;
+        $("qcard").classList.add("hidden");
+        $("summary").textContent = j.summary_md;
+        var d = j.delivered || {};
+        var parts = [d.email ? "נשלח למייל" : "לא נשלח למייל"];
+        if (d.docs) parts.push("Google Docs: " + d.docs);
+        $("delivered").textContent = parts.join(" | ") + (j.llm === false ? " | נוצר בלי עיבוד" : "");
+        $("scard").classList.remove("hidden");
+        audioList = j.audio_urls || []; audioIdx = 0;
+        if (audioList.length) { $("player").classList.remove("hidden"); playNext(); }
+        status("הסיכום מוכן");
+      }
+    } catch (e) { status("שגיאה: " + e.message); }
+    $("finish").disabled = false;
+  };
+})();
+</script>
+</body>
+</html>

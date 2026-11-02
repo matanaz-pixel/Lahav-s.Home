@@ -23,6 +23,11 @@ from flask import Flask, Response, jsonify, request
 
 app = Flask(__name__)
 
+# מצב משמרת (סיכום משמרת): shift.py
+from shift import bp as shift_bp  # noqa: E402
+
+app.register_blueprint(shift_bp)
+
 EL_KEY = os.environ.get("ELEVENLABS_API_KEY")
 AN_KEY = os.environ.get("ANTHROPIC_API_KEY")
 MODEL = os.environ.get("DASHIE_MODEL", "claude-haiku-5-5")

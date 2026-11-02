@@ -1,0 +1,6 @@
+flask>=3.0,<4
+requests>=2.31
+# אופציונלי: רק אם משתמשים ב-Google Docs/Drive (GOOGLE_SA_JSON)
+google-auth>=2.29
+# בדיקות
+pytest>=8

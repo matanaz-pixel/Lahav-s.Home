@@ -48,6 +48,8 @@ struct Layout {
   int replyTextY = 100, replyBottom = 210, replyLineLatin = 18, replyLineHe = 24, wrapW = 300, margin = 8;
   // crash screen
   int crashY1 = 20, crashY2 = 56, crashNumY = 96, crashHintY = 190, crashSosY = 100;
+  // shift mode: status screen hint lines, end-of-shift question screen
+  int shHintY = 186, shHint2Y = 0, sqTitleY = 8, sqTextY = 44, sqHintY = 192, sqRowMax = 0;
 
   int barH() const { return H - barY; }
   int cx() const { return W / 2; }
@@ -79,6 +81,7 @@ struct Layout {
     replyFaceX = W / 2; replyFaceY = 18; replyFaceS = 0.28f;
     replyTextY = 44; replyBottom = H - 2; replyLineLatin = 17; replyLineHe = 22; wrapW = W - 16; margin = 8;
     crashY1 = 4; crashY2 = 24; crashNumY = 44; crashHintY = H - 22; crashSosY = 50;
+    shHintY = 76; shHint2Y = 92; sqTitleY = 2; sqTextY = 22; sqHintY = H - 22;
   }
 };
 

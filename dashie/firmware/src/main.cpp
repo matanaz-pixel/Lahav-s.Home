@@ -17,6 +17,7 @@
 #include "trigger.h"
 #include "face.h"
 #include "layout.h"
+#include "shift.h"
 #ifdef USE_A2DP_OUT
 #include "a2dp_out.h"
 #endif
@@ -28,8 +29,12 @@
 // ----------------------------------------------------------------------------
 // Types & globals
 // ----------------------------------------------------------------------------
-enum class St : uint8_t { IDLE, LISTEN, RECORD, THINK, REPLY, ERROR, CRASH };
+enum class St : uint8_t { IDLE, LISTEN, RECORD, THINK, REPLY, ERROR, CRASH, NOTE, SQ, SWAIT };   // NOTE/SQ/SWAIT: shift mode
+#if SHIFT_ENABLED
+enum Screen : uint8_t { SC_FACE, SC_NOISE, SC_G, SC_TRIP, SC_SHIFT, SC_SET, SC_COUNT };
+#else
 enum Screen : uint8_t { SC_FACE, SC_NOISE, SC_G, SC_TRIP, SC_SET, SC_COUNT };
+#endif
 enum Align : uint8_t { AL_L, AL_C, AL_R };
 
 static constexpr uint16_t rgb(uint8_t r, uint8_t g, uint8_t b) { return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3); }
@@ -98,10 +103,13 @@ static float trail[24][2]; static uint8_t trailIdx = 0;
 
 // errors / reply
 static StrId errId = S_ERR_NOBRIDGE;
+static bool errInfo = false;                     // true = friendly info (neutral face) instead of an error
 static Mood replyMood = Mood::HAPPY;
 static std::vector<String> replyLines;
 static bool replyHeFont = false; static bool replyRight = false;
 static uint32_t replySince = 0;
+static uint32_t replyHoldMs = 8000;              // how long REPLY stays after the audio ended (long summaries: more)
+static String shiftReplyText;                    // set by shift mode: text to show instead of job.reply
 
 // playback
 static uint8_t* playBuf = nullptr; static size_t playLen = 0, playDataOff = 44, playDataLen = 0;
@@ -145,7 +153,7 @@ static void* bigAlloc(size_t n) {
   return p;
 }
 
-static bool downloadAudio(const char* urlIn) {
+static bool fetchWav(const char* urlIn, uint8_t** outBuf, size_t* outLen) {
   String url = urlIn;
   if (url.startsWith("/")) {                       // relative -> bridge origin
     String b = BRIDGE_URL;
@@ -161,7 +169,9 @@ static bool downloadAudio(const char* urlIn) {
   http.setTimeout(8000);
   bool ok = false;
   uint8_t* buf = nullptr;
-  if (http.begin(*cl, url) && http.GET() == 200) {
+  bool began = http.begin(*cl, url);
+  if (began && strlen(SHIFT_BRIDGE_TOKEN)) http.addHeader("Authorization", String("Bearer ") + SHIFT_BRIDGE_TOKEN);
+  if (began && http.GET() == 200) {
     int len = http.getSize();
     if (len <= (int)AUDIO_MAX_BYTES && len != 0) {
       size_t cap = len > 0 ? (size_t)len : (size_t)AUDIO_MAX_BYTES;
@@ -176,7 +186,7 @@ static bool downloadAudio(const char* urlIn) {
         }
         bool tooBig = (len < 0 && n >= cap && s->available());
         if (!tooBig && n >= 44 && memcmp(buf, "RIFF", 4) == 0) {
-          job.audio = buf; job.audioLen = n; ok = true;
+          *outBuf = buf; *outLen = n; ok = true;
         }
       }
     }
@@ -186,6 +196,8 @@ static bool downloadAudio(const char* urlIn) {
   delete cl;
   return ok;
 }
+
+static bool downloadAudio(const char* urlIn) { return fetchWav(urlIn, &job.audio, &job.audioLen); }
 
 static StrId doRequest() {
   if (strlen(BRIDGE_URL) == 0) return S_ERR_NOBRIDGE;
@@ -440,7 +452,11 @@ static void toIdle(uint32_t now) {
 }
 
 static void toError(StrId e, uint32_t now) {
-  errId = e; freeRec();
+  errId = e; errInfo = false; freeRec();
+  setSt(St::ERROR, now);
+}
+static void toInfo(StrId e, uint32_t now) {      // same screen as an error, but a calm face
+  errId = e; errInfo = true; freeRec();
   setSt(St::ERROR, now);
 }
 
@@ -481,8 +497,38 @@ static void startNet(uint32_t now) {
   setSt(St::THINK, now);
 }
 
+// Takes ownership of a downloaded WAV (16-bit mono) and plays it: A2DP kit first, internal speaker as fallback.
+static void startPlayback(uint8_t* buf, size_t len) {
+  playBuf = buf; playLen = len;
+  playDataOff = 44; playDataLen = playLen > 44 ? playLen - 44 : 0; playRate = 16000;
+  for (size_t i = 12; i + 8 < playLen && i < 200; i++) {            // find "data" chunk
+    if (memcmp(playBuf + i, "data", 4) == 0) {
+      uint32_t dl; memcpy(&dl, playBuf + i + 4, 4);
+      playDataOff = i + 8; playDataLen = min<size_t>(dl, playLen - playDataOff); break;
+    }
+  }
+  uint32_t sr; memcpy(&sr, playBuf + 24, 4); if (sr >= 8000 && sr <= 48000) playRate = sr;
+  bool onBt = false;
+#ifdef USE_A2DP_OUT
+  uint16_t ch, bits; memcpy(&ch, playBuf + 22, 2); memcpy(&bits, playBuf + 34, 2);
+  if (ch == 1 && bits == 16 && playDataLen >= 3200 && !a2o::busy())
+    onBt = viaBt = a2o::play((const int16_t*)(playBuf + playDataOff), playDataLen / 2, playRate);
+#endif
+  if (!onBt) {
+#ifdef DASHIE_NO_SPEAKER
+    heap_caps_free(playBuf); playBuf = nullptr;       // buzzer only: text-only reply
+#else
+    audSpk();
+    M5.Speaker.setVolume(VOL_LV[cfg.vol]);
+    M5.Speaker.playWav(playBuf, playLen);
+    playStart = millis();
+#endif
+  }
+}
+
 static void startReply(uint32_t now) {
-  String r = job.reply[0] ? String(job.reply) : String(job.text);
+  String r = shiftReplyText.length() ? shiftReplyText : (job.reply[0] ? String(job.reply) : String(job.text));
+  const bool longText = shiftReplyText.length() > 0; shiftReplyText = "";
   replyMood = Mood::HAPPY;
   if (strcmp(job.action, "face:angry") == 0) replyMood = Mood::ANGRY;
   else if (strcmp(job.action, "face:confused") == 0) replyMood = Mood::CONFUSED;
@@ -499,39 +545,261 @@ static void startReply(uint32_t now) {
   replyRight = replyHeFont;
   wrapText(r, replyHeFont, L.wrapW, 2);
   replySince = now;
+  replyHoldMs = 8000;
+  if (longText) {                                  // shift summary: keep it on screen while it scrolls
+    int lh = (replyHeFont || heActive()) ? L.replyLineHe : L.replyLineLatin;
+    int extra = (int)replyLines.size() - (L.replyBottom - L.replyTextY) / lh;
+    if (extra > 0) replyHoldMs = 8000 + (uint32_t)extra * 1800;
+  }
 
   // take ownership of downloaded audio and play it
   if (job.audio) {
-    playBuf = job.audio; playLen = job.audioLen; job.audio = nullptr; job.audioLen = 0;
-    playDataOff = 44; playDataLen = playLen > 44 ? playLen - 44 : 0; playRate = 16000;
-    for (size_t i = 12; i + 8 < playLen && i < 200; i++) {            // find "data" chunk
-      if (memcmp(playBuf + i, "data", 4) == 0) {
-        uint32_t dl; memcpy(&dl, playBuf + i + 4, 4);
-        playDataOff = i + 8; playDataLen = min<size_t>(dl, playLen - playDataOff); break;
-      }
-    }
-    uint32_t sr; memcpy(&sr, playBuf + 24, 4); if (sr >= 8000 && sr <= 48000) playRate = sr;
-    bool onBt = false;
-#ifdef USE_A2DP_OUT
-    uint16_t ch, bits; memcpy(&ch, playBuf + 22, 2); memcpy(&bits, playBuf + 34, 2);
-    if (ch == 1 && bits == 16 && playDataLen >= 3200 && !a2o::busy())
-      onBt = viaBt = a2o::play((const int16_t*)(playBuf + playDataOff), playDataLen / 2, playRate);
-#endif
-    if (!onBt) {
-#ifdef DASHIE_NO_SPEAKER
-      heap_caps_free(playBuf); playBuf = nullptr;       // buzzer only: text-only reply
-#else
-      audSpk();
-      M5.Speaker.setVolume(VOL_LV[cfg.vol]);
-      M5.Speaker.playWav(playBuf, playLen);
-      playStart = millis();
-#endif
-    }
+    uint8_t* a = job.audio; size_t an = job.audioLen; job.audio = nullptr; job.audioLen = 0;
+    startPlayback(a, an);
   }
   if (strcmp(job.action, "beep") == 0) beep(1800, 120);
   job.status = 0;
   setSt(St::REPLY, now);
 }
+
+// ----------------------------------------------------------------------------
+// Shift mode UI (logic, storage and uploads: shift.cpp). Compiled out with SHIFT_ENABLED=0.
+// Input scheme: 'N' = note button click, 'E' = note button hold (end shift / skip), 'H' = hold on the Shift screen (start).
+//   Core2/CoreS3: the physical side button (BtnPWR). Plus2: BtnA. While a shift runs and the screen is dark
+//   ("pocket mode") the touch zones are ignored, so only the physical button works.
+// ----------------------------------------------------------------------------
+#if SHIFT_ENABLED
+enum class SqMode : uint8_t { CONFIRM, QUESTIONS };
+static SqMode sqMode = SqMode::CONFIRM;
+static std::vector<String> sqQ;
+static int sqIdx = 0;
+static bool sqFollow = false;                    // true = follow-up questions from the bridge (need_info)
+static St noteReturn = St::IDLE;
+static uint32_t swaitSince = 0, confirmSince = 0;
+static bool haveVib = false, warnedWrite = false, warnedSum = false;
+static String hapSeq; static uint8_t hapIdx = 0; static uint32_t hapNext = 0, vibOff = 0;
+static int battPct = -1; static uint32_t lastBattPoll = 0, lastWarn = 0;
+static volatile uint8_t qState = 0;              // question audio: 0 none, 1 fetching, 2 ready, 3 failed
+static uint8_t* qBuf = nullptr; static size_t qLen = 0; static char qUrl[200]; static int qFor = -1;
+
+static bool shiftPocket(uint32_t now) {
+  return shift::active() && st != St::CRASH && now - lastActivity > SHIFT_POCKET_MS;
+}
+
+// Feedback that works in a pocket: vibration on Core2, short beeps on buzzer boards ('s' short, 'l' long, '.' pause).
+static void haptic(const char* pat) {
+  if (haveVib) { hapSeq = pat; hapIdx = 0; hapNext = 0; return; }
+  for (const char* q = pat; *q; ++q) {
+    if (*q == 's') beep(2200, 70); else if (*q == 'l') beep(1500, 260); else delay(120);
+  }
+}
+static void hapticTick(uint32_t now) {
+  if (vibOff && now >= vibOff) { M5.Power.setVibration(0); vibOff = 0; }
+  if (!haveVib || hapIdx >= hapSeq.length() || now < hapNext || vibOff) return;
+  char c = hapSeq[hapIdx++];
+  if (c == 's' || c == 'l') { M5.Power.setVibration(200); vibOff = now + (c == 's' ? 90 : 320); hapNext = vibOff + 120; }
+  else hapNext = now + 160;
+}
+
+static String safeText(const String& in, bool& he) {   // Hebrew without a font => ASCII part only
+  String r = in;
+  bool hasHe = rtl::hasHebrew(r.c_str());
+#ifdef HAVE_HE_FONT
+  he = hasHe;
+#else
+  he = false;
+  if (hasHe) { String a = asciiOnly(r.c_str()); a.replace("?", ""); a.trim(); r = a.length() ? a : String(ui(S_NONLATIN)); }
+#endif
+  return r;
+}
+
+static void noteStart(uint32_t now, St ret) {
+  if (playBuf) stopPlayback();
+  if (aud != Aud::MIC) audMic();
+  haptic("s");
+  if (!shift::noteBegin()) { haptic("lll"); toError(S_ERR_NOSTORE, now); return; }
+  noteReturn = ret;
+  micGuardUntil = millis() + 300;                // skip the vibration / beep noise at the start of the note
+  memset(wave, 0, sizeof(wave));
+  setSt(St::NOTE, millis());
+}
+
+static void sqNext(uint32_t now);
+static void sqShow(uint32_t now);
+
+static void noteStop(uint32_t now, bool autoStop) {
+  uint32_t dur = 0;
+  shift::NoteEnd r = shift::noteEnd(&dur);
+  haptic(r == shift::NE_OK ? (autoStop ? "sss" : "ss") : (r == shift::NE_ERROR ? "lll" : ""));
+  St ret = noteReturn; noteReturn = St::IDLE;
+  if (ret == St::SQ) { setSt(St::SQ, now); if (r == shift::NE_OK) sqNext(now); }
+  else setSt(St::IDLE, now);
+}
+
+static void qTask(void*) {
+  uint8_t* b = nullptr; size_t n = 0;
+  bool ok = fetchWav(qUrl, &b, &n);
+  if (ok) { qBuf = b; qLen = n; qState = 2; } else qState = 3;
+  vTaskDelete(nullptr);
+}
+
+static void sqShow(uint32_t now) {
+  shift::setLang(g_lang);
+  sqMode = SqMode::QUESTIONS;
+  bool he = false;
+  String t = safeText(sqQ[sqIdx], he);
+  replyHeFont = he; replyRight = he;
+  wrapText(t, he, L.wrapW, 2);
+  setSt(St::SQ, now);
+  if (!sqFollow && qState == 0 && shift::questionUrl(sqIdx + 1, qUrl, sizeof(qUrl))) {   // best effort: spoken question
+    qFor = sqIdx; qState = 1;
+    xTaskCreatePinnedToCore(qTask, "qfetch", 12288, nullptr, 1, nullptr, 0);
+  }
+}
+
+static void swaitStart(uint32_t now) {
+  shift::setLang(g_lang);
+  if (!shift::finishBegin(true)) { toError(S_ERR_BRIDGE, now); return; }
+  swaitSince = now;
+  setSt(St::SWAIT, now);
+}
+
+static void sqNext(uint32_t now) {
+  sqIdx++;
+  if (sqIdx < (int)sqQ.size()) sqShow(now); else swaitStart(now);
+}
+
+static void startQuestions(uint32_t now) {
+  sqQ.clear();
+  sqQ.push_back(ui(S_Q1)); sqQ.push_back(ui(S_Q2)); sqQ.push_back(ui(S_Q3)); sqQ.push_back(ui(S_Q4));
+  sqIdx = 0; sqFollow = false;
+  sqShow(now);
+}
+
+static void startSummary(const String& text, const String& url, uint32_t now) {
+  if (job.status != 0) { toError(S_ERR_BUSY, now); return; }
+  shiftReplyText = text.length() ? text : String(ui(S_NOREPLY));
+  job.text[0] = job.reply[0] = 0; strlcpy(job.action, "face:happy", sizeof(job.action));
+  strlcpy(job.audioUrl, url.c_str(), sizeof(job.audioUrl));
+  job.orphan = false; job.audio = nullptr; job.audioLen = 0;
+#if defined(DASHIE_NO_SPEAKER) && !defined(USE_A2DP_OUT)
+  job.status = 2;                                   // nothing could play the audio: text only
+#else
+  if (job.audioUrl[0]) {
+    job.status = 1;
+    xTaskCreatePinnedToCore([](void*) { downloadAudio(job.audioUrl); job.status = 2; vTaskDelete(nullptr); },
+                            "sumfetch", 20480, nullptr, 1, nullptr, 0);
+  } else job.status = 2;
+#endif
+  setSt(St::THINK, now);
+}
+
+static void startReadLast(uint32_t now) {
+  String id, spoken, url;
+  if (!shift::lastSummary(id, spoken, url)) { toInfo(S_NO_SUMMARY, now); return; }
+  startSummary(spoken, url, now);
+}
+
+// Returns true when the key was consumed by shift mode.
+static bool shiftAction(char which, uint32_t now) {
+  if (st == St::CRASH) return false;
+  const bool on = shift::active();
+  if (st == St::IDLE && screen == SC_SHIFT) {        // touch zones / B-hold on the Shift screen
+    if (which == 'A') { if (on) which = 'N'; else return true; }
+    else if (which == 'C') { if (on) which = 'E'; else { startReadLast(now); return true; } }
+  }
+  switch (which) {
+    case 'N':
+      if (st == St::NOTE) noteStop(now, false);
+      else if (st == St::SQ) { if (sqMode == SqMode::CONFIRM) startQuestions(now); else noteStart(now, St::SQ); }
+      else if (st == St::IDLE && on) noteStart(now, St::IDLE);
+      return true;
+    case 'E':
+      if (st == St::IDLE && on) { confirmSince = now; sqMode = SqMode::CONFIRM; setSt(St::SQ, now); haptic("ls"); }
+      else if (st == St::SQ) {
+        if (sqMode == SqMode::QUESTIONS) { if (playBuf) { stopPlayback(); audMic(); } sqNext(now); }
+        else setSt(St::IDLE, now);
+      }
+      return true;
+    case 'H':
+      if (st == St::IDLE && !on && !shift::finishing()) {
+        if (shift::start()) haptic("l"); else toError(S_ERR_NOSTORE, now);
+      }
+      return true;
+    default: break;
+  }
+  if (st == St::NOTE) return true;                   // recording: ignore everything else
+  if (st == St::SWAIT) { shift::finishDetach(); toInfo(S_SAVED_OFFLINE, now); return true; }
+  if (st == St::SQ) { if (playBuf) { stopPlayback(); audMic(); } setSt(St::IDLE, now); return true; }   // cancel
+  return false;
+}
+
+// Runs every loop(): haptics, upload gating, warnings and the shift state timers.
+static void shiftLoop(uint32_t now) {
+  shift::loop(now);
+  hapticTick(now);
+  bool busy = st == St::LISTEN || st == St::RECORD || st == St::THINK || st == St::REPLY || st == St::CRASH;
+#ifdef USE_A2DP_OUT
+  busy = busy || a2o::busy() || testRunning;
+#endif
+  shift::hold(busy);
+#ifdef DASHIE_BUTTONS_ONLY
+  {                                                    // Plus2: a long press must be deliberate while A is the note button
+    static bool longHold = false;
+    bool want = shift::active() || st == St::SQ || st == St::NOTE || st == St::SWAIT;
+    if (want != longHold) { M5.BtnA.setHoldThresh(want ? 1500 : 500); longHold = want; }
+  }
+#endif
+  if (now - lastBattPoll > 10000) { lastBattPoll = now; battPct = (int)M5.Power.getBatteryLevel(); }
+
+  shift::Status ss = shift::status();
+  if (shift::active() && !shift::recording() && st == St::IDLE) {     // warnings never interrupt a recording
+    if (ss.writeErr && !warnedWrite) { warnedWrite = true; haptic("lll"); }
+    if (now - lastWarn > 300000) {
+      bool low = (battPct >= 0 && battPct < SHIFT_LOW_BATT_PCT && M5.Power.isCharging() != m5::Power_Class::is_charging)
+                 || (ss.freeSec >= 0 && ss.freeSec < 120);
+      if (low) { lastWarn = now; haptic("lsl"); }
+    }
+  }
+  if (!shift::active()) warnedWrite = false;
+  if (ss.summaryReady && !warnedSum && st == St::IDLE) { warnedSum = true; haptic("ssl"); }
+  if (!ss.summaryReady) warnedSum = false;
+
+  switch (st) {
+    case St::NOTE:
+      if (now - stSince >= (uint32_t)SHIFT_NOTE_MAX_S * 1000UL) noteStop(now, true);
+      break;
+    case St::SQ:
+      if (sqMode == SqMode::CONFIRM && now - confirmSince > 6000) setSt(St::IDLE, now);
+      else if (sqMode == SqMode::QUESTIONS) {
+        if (qState == 2) {
+          qState = 0;
+          if (qFor == sqIdx && !playBuf && !shift::recording()) startPlayback(qBuf, qLen);
+          else { heap_caps_free(qBuf); }
+          qBuf = nullptr;
+        } else if (qState == 3) qState = 0;
+        if (playBuf && !audioActive()) { stopPlayback(); audMic(); }
+        if (now - lastActivity > 180000) { if (playBuf) { stopPlayback(); audMic(); } setSt(St::IDLE, now); }
+      }
+      break;
+    case St::SWAIT: {
+      shift::FinState fs = shift::finishState();
+      if (fs == shift::FS_DONE || fs == shift::FS_NEED || fs == shift::FS_ERR) {
+        shift::Result r; shift::takeResult(r);
+        if (fs == shift::FS_DONE) startSummary(r.spoken.length() ? r.spoken : r.summary.substring(0, 600), r.audioUrl, now);
+        else if (fs == shift::FS_NEED) { sqQ = r.questions; sqIdx = 0; sqFollow = true; haptic("ss"); sqShow(now); }
+        else { shift::finishDetach(); toError(S_ERR_BRIDGE, now); }
+      } else if (now - swaitSince > SHIFT_FINISH_WAIT_MS) {
+        shift::finishDetach(); toInfo(S_SAVED_OFFLINE, now);
+      }
+      break;
+    }
+    default: break;
+  }
+}
+#else
+static inline bool shiftPocket(uint32_t) { return false; }
+#endif
 
 // ----------------------------------------------------------------------------
 // Input
@@ -559,7 +827,11 @@ static void cancelCrash(uint32_t now) {
 static void onAction(char which, uint32_t now) {
   if (now - lastBtn < 150) return;
   lastBtn = now; lastActivity = now;
+#if SHIFT_ENABLED
+  if (shiftAction(which, now)) return;
+#endif
   switch (st) {
+    case St::NOTE: case St::SQ: case St::SWAIT: return;        // shift mode owns these states
     case St::CRASH: cancelCrash(now); return;
     case St::ERROR: toIdle(now); return;
     case St::LISTEN: case St::RECORD: if (which == 'A' || which == 'T') toIdle(now); return;
@@ -617,12 +889,32 @@ static void onAction(char which, uint32_t now) {
 static void handleInput(uint32_t now) {
 #ifdef DASHIE_BUTTONS_ONLY
   const bool inSet = (screen == SC_SET) && st == St::IDLE;
-  if (M5.BtnA.wasHold()) onAction(inSet ? 'S' : 'A', now);
-  else if (M5.BtnA.wasClicked()) onAction('A', now);
+#if SHIFT_ENABLED
+  const bool shiftOn = shift::active() || st == St::SQ || st == St::NOTE || st == St::SWAIT;
+  if (shiftOn) {                                    // during a shift A is the note button (hold = end / skip)
+    if (M5.BtnA.wasHold()) onAction('E', now);
+    else if (M5.BtnA.wasClicked()) onAction('N', now);
+  } else if (screen == SC_SHIFT && st == St::IDLE && M5.BtnA.wasHold()) {
+    onAction('H', now);
+  } else
+#endif
+  {
+    if (M5.BtnA.wasHold()) onAction(inSet ? 'S' : 'A', now);
+    else if (M5.BtnA.wasClicked()) onAction('A', now);
+  }
   if (M5.BtnB.wasHold()) onAction('C', now);
   else if (M5.BtnB.wasClicked()) onAction(inSet ? 'C' : 'B', now);
   if (M5.BtnPWR.wasClicked()) onAction('S', now);
 #else
+#if SHIFT_ENABLED
+  {
+    const bool sh = shift::active() || st == St::SQ || st == St::NOTE;
+    if (sh && M5.BtnPWR.wasClicked()) onAction('N', now);              // physical side button
+    if (sh && M5.BtnPWR.wasHold()) onAction('E', now);
+    if (screen == SC_SHIFT && st == St::IDLE && !shift::active() && !shift::finishing() && M5.BtnA.wasHold()) onAction('H', now);
+    if (shiftPocket(now)) return;                                      // screen off: touch zones are ignored
+  }
+#endif
   if (M5.BtnA.wasPressed()) onAction('A', now);
   else if (M5.BtnB.wasPressed()) onAction('B', now);
   else if (M5.BtnC.wasPressed()) onAction('C', now);
@@ -654,7 +946,7 @@ static void processFrame(const int16_t* f, uint32_t now) {
 
   if (st == St::IDLE) {
     bool fire = false;
-    if (cfg.voice) {
+    if (cfg.voice && !shift::active()) {          // no voice trigger during a shift (kitchen noise, pocket)
       float margin = SENS_DB[cfg.sens] + (driving ? 4.0f : 0.0f);
       fire = shout.update(dbNow, now, margin);
 #ifdef USE_EI_KWS
@@ -673,6 +965,8 @@ static void processFrame(const int16_t* f, uint32_t now) {
     } else if (!speechSeen && recMs >= 2500) {
       toError(S_ERR_NOCATCH, now);
     }
+  } else if (st == St::NOTE) {
+    shift::noteFeed(f, FR);                           // streamed to storage by the writer task
   }
 }
 
@@ -680,6 +974,10 @@ static void processFrame(const int16_t* f, uint32_t now) {
 // IMU
 // ----------------------------------------------------------------------------
 static void startCrash(uint32_t now) {
+#if SHIFT_ENABLED
+  if (st == St::NOTE) noteStop(now, true);
+  if (st == St::SWAIT) shift::finishDetach();
+#endif
   stopPlayback(); freeRec();
   if (st == St::THINK) job.orphan = true;
   if (aud != Aud::MIC) audMic();
@@ -737,6 +1035,9 @@ static const FaceColors& col() { return THEMES[cfg.theme]; }
 #  define BAR_SET    S_NEXT, S_NEXT, S_OPT
 #  define BAR_PICK   S_NEXT, S_BACK, S_PICK
 #endif
+
+#define BAR_SHIFT_IDLE S_START, S_NEXT, S_READ       // Shift screen, no shift running
+#define BAR_SHIFT_ON   S_NOTE, S_NEXT, S_END         // Shift screen, shift running
 
 static void bottomBar(StrId a, StrId b, StrId c) {
   const FaceColors& k = col();
@@ -849,6 +1150,57 @@ static void renderScreen(uint32_t now) {
       bottomBar(BAR_RESET);
       break;
     }
+#if SHIFT_ENABLED
+    case SC_SHIFT: {
+      shift::Status ss = shift::status();
+      const bool on = ss.active || ss.finishing;
+      const uint16_t amber = rgb(255, 170, 40), red = rgb(255, 80, 60);
+#ifdef DASHIE_BUTTONS_ONLY
+      const char* noteHint = ui(S_SH_HINT_STICK);
+#else
+      const char* noteHint = ui(S_SH_HINT_CORE);
+#endif
+      int y = L.rowY0;
+      if (on) {
+        char tb[16] = "--:--:--";
+        time_t tn = time(nullptr);
+        if (ss.startedAt && tn > (time_t)ss.startedAt) {
+          unsigned long e = (unsigned long)(tn - ss.startedAt);
+          snprintf(tb, sizeof(tb), "%02lu:%02lu:%02lu", e / 3600, (e / 60) % 60, e % 60);
+        }
+        row(y, ui(S_TIME), tb, k.fg, k.acc); y += L.rowPitch;
+        row(y, ui(S_SH_NOTES), String(ss.notes), k.fg, k.acc); y += L.rowPitch;
+        row(y, ui(S_SH_QUEUE), String(ss.pending) + ((ss.pending && !ss.online) ? String(" ") + ui(S_SH_OFFLINE) : String("")),
+            k.fg, (ss.pending && !ss.online) ? amber : k.acc); y += L.rowPitch;
+        row(y, ui(S_SH_BATT), battPct >= 0 ? String(battPct) + "%" : String("--"), k.fg,
+            (battPct >= 0 && battPct < SHIFT_LOW_BATT_PCT) ? red : k.acc); y += L.rowPitch;
+        if (!L.compact) {
+          String st2 = ss.backend == shift::BK_SD ? String("SD") : (ss.backend == shift::BK_LFS ? String("Flash") : String("-"));
+          if (ss.freeSec >= 0) st2 += String(" ") + String(ss.freeSec / 60) + " min";
+          row(y, ui(S_SH_STORE), st2, k.fg, (ss.freeSec >= 0 && ss.freeSec < 120) ? red : k.acc);
+        }
+        const char* warn = nullptr; uint16_t wc = red;
+        if (ss.writeErr) warn = ui(S_SH_WRITEERR);
+        else if (ss.freeSec >= 0 && ss.freeSec < 120) warn = ui(S_SH_LOWSTORE);
+        else if (battPct >= 0 && battPct < SHIFT_LOW_BATT_PCT) warn = ui(S_SH_LOWBATT);
+        else if (ss.finishing) { warn = ui(S_SENDING); wc = k.acc; }
+        else if (ss.summaryReady) { warn = ui(S_SH_SUMREADY); wc = k.acc; }
+        if (warn) {
+          say(warn, L.cx(), L.shHintY, AL_C, 1, wc);
+          if (L.shHint2Y) say(noteHint, L.cx(), L.shHint2Y, AL_C, 1, k.fg);
+        } else say(noteHint, L.cx(), L.shHintY, AL_C, 1, k.fg);
+        bottomBar(BAR_SHIFT_ON);
+      } else {
+        row(y, ui(S_SHIFT), ui(S_SH_NONE), k.fg, k.acc); y += L.rowPitch;
+        row(y, ui(S_SH_LAST), ui(shift::hasLastSummary() ? S_SH_READY : S_SH_NOLAST), k.fg, k.acc); y += L.rowPitch;
+        if (ss.pending) row(y, ui(S_SH_QUEUE), String(ss.pending), k.fg, amber);
+        say(ui(S_SH_HOLDA), L.cx(), L.shHintY, AL_C, 1, k.fg);
+        if (ss.summaryReady && L.shHint2Y) say(ui(S_SH_SUMREADY), L.cx(), L.shHint2Y, AL_C, 1, k.acc);
+        bottomBar(BAR_SHIFT_IDLE);
+      }
+      break;
+    }
+#endif
     case SC_SET: {
 #ifdef USE_A2DP_OUT
       if (btPicking) {                            // scan results: pick the kit
@@ -971,9 +1323,56 @@ static void renderOverlay(uint32_t now) {
       }
       break;
     }
+#if SHIFT_ENABLED
+    case St::NOTE: {
+      drawFace(cv, L.cx(), L.recFaceY, L.recFaceS, Mood::LISTEN, now, k);
+      for (int i = 0; i < 64; i++) {
+        float v = wave[(waveIdx + i) % 64];
+        int h = 2 + (int)(v * L.waveMaxH);
+        cv.fillRect(L.waveX + i * L.waveStep, L.waveBase - h / 2, L.waveW, h, rgb(255, 90, 70));
+      }
+      if ((now / 500) % 2) cv.fillCircle(L.margin + 4, L.statusY + 7, 5, rgb(255, 60, 40));
+      say(ui(S_REC_NOTE), L.margin + 14, L.statusY, AL_L, 2, k.fg);
+      snprintf(b, sizeof(b), "%lus", (unsigned long)((now - stSince) / 1000));
+      say(b, L.right(), L.statusY, AL_R, 2, k.acc, true);
+      break;
+    }
+    case St::SQ: {
+#ifdef DASHIE_BUTTONS_ONLY
+      const char* confirmHint = ui(S_ENDQ_STICK); const char* qHint = ui(S_Q_HINT_STICK);
+#else
+      const char* confirmHint = ui(S_ENDQ_CORE); const char* qHint = ui(S_Q_HINT_CORE);
+#endif
+      if (sqMode == SqMode::CONFIRM) {
+        say(ui(S_ENDQ), L.cx(), L.H * 2 / 5 - 8, AL_C, 2, k.acc);
+        say(confirmHint, L.cx(), L.H * 3 / 5 - 4, AL_C, L.compact ? 1 : 2, k.fg);
+      } else {
+        snprintf(b, sizeof(b), "%d/%d", sqIdx + 1, (int)sqQ.size());
+        say(b, L.right(), L.sqTitleY, AL_R, 2, k.acc, true);
+        int lineH = replyHeFont ? L.replyLineHe : L.replyLineLatin;
+        int vis = (L.sqHintY - L.sqTextY - 4) / lineH;
+        for (int i = 0; i < vis && i < (int)replyLines.size(); i++) {
+          setupFont(replyHeFont, 2);
+          cv.setTextColor(k.fg);
+          const String& ln = replyLines[i];
+          int x = replyRight ? L.right() - cv.textWidth(ln.c_str()) : L.margin;
+          cv.drawString(ln.c_str(), x, L.sqTextY + i * lineH);
+        }
+        say(qHint, L.cx(), L.sqHintY, AL_C, 1, k.acc);
+      }
+      break;
+    }
+    case St::SWAIT: {
+      drawFace(cv, L.cx(), L.thinkCy, L.faceS, Mood::THINK, now, k);
+      shift::Status ss = shift::status();
+      String msg = ss.pending ? String(ui(S_SENDING)) + " " + String(ss.pending) : String(ui(S_SUMMARIZING));
+      say(msg, L.cx(), L.statusY, AL_C, 2, k.acc);
+      break;
+    }
+#endif
     case St::ERROR:
-      drawFace(cv, L.cx(), L.errCy, L.errS, Mood::CONFUSED, now, k);
-      say(ui(errId), L.cx(), L.errY, AL_C, 2, rgb(255, 160, 80));
+      drawFace(cv, L.cx(), L.errCy, L.errS, errInfo ? Mood::NEUTRAL : Mood::CONFUSED, now, k);
+      say(ui(errId), L.cx(), L.errY, AL_C, 2, errInfo ? k.acc : rgb(255, 160, 80));
       break;
     default: break;
   }
@@ -999,6 +1398,7 @@ static void renderCrash(uint32_t now) {
 static void applyBrightness(uint32_t now) {
   uint8_t want = BRIGHT_LV[cfg.bright];
   if (st == St::IDLE && now - lastActivity > IDLE_DIM_MS) want = min<uint8_t>(want, 24);
+  if (shiftPocket(now)) want = 0;                   // shift running + no input: screen off ("pocket mode")
   if (want != lastBright) { M5.Display.setBrightness(want); lastBright = want; }
 }
 
@@ -1027,6 +1427,11 @@ void setup() {
 
   if (strlen(WIFI_SSID)) { WiFi.mode(WIFI_STA); WiFi.setAutoReconnect(true); WiFi.begin(WIFI_SSID, WIFI_PASS); }
   configTzTime(TZ_STRING, "pool.ntp.org");
+#if SHIFT_ENABLED
+  haveVib = (M5.getBoard() == m5::board_t::board_M5StackCore2);
+#endif
+  shift::setLang(g_lang);
+  shift::begin();                                   // RTC -> clock, resume a shift that was running before a reboot
 
   M5.Speaker.end();
   audMic();
@@ -1046,6 +1451,9 @@ void loop() {
   }
 #endif
   handleInput(now);
+#if SHIFT_ENABLED
+  shiftLoop(now);
+#endif
 
   const int16_t* f = nullptr;
   bool got = pollMic(&f);
@@ -1091,7 +1499,7 @@ void loop() {
       } else {
         mouthOpen = 0;
         if (playBuf) { stopPlayback(); audMic(); }
-        if (now - stSince >= 8000) toIdle(now);
+        if (now - stSince >= replyHoldMs) toIdle(now);
       }
       break;
     }
@@ -1128,11 +1536,15 @@ void loop() {
   if (now - lastDraw >= interval) {
     lastDraw = now;
     applyBrightness(now);
-    cv.fillScreen(col().bg);
-    if (st == St::CRASH) renderCrash(now);
-    else if (st == St::IDLE) renderScreen(now);
-    else renderOverlay(now);
-    cv.pushSprite(0, 0);
+    if (!shiftPocket(now)) {                        // pocket mode: nothing to draw
+      cv.fillScreen(col().bg);
+      if (st == St::CRASH) renderCrash(now);
+      else if (st == St::IDLE) renderScreen(now);
+      else renderOverlay(now);
+      shift::busLock();                             // display and SD card share the SPI bus on Core2
+      cv.pushSprite(0, 0);
+      shift::busUnlock();
+    }
   }
 
   if (!got) delay(1);

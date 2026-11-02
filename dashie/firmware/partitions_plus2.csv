@@ -1,0 +1,7 @@
+# Name,   Type, SubType, Offset,   Size,     Flags
+# StickC Plus2 (8 MB flash): single app slot (no OTA) + a big LittleFS partition for shift-mode voice notes.
+# Label "spiffs" is what LittleFS.begin() mounts by default.
+nvs,      data, nvs,     0x9000,   0x5000,
+phy_init, data, phy,     0xf000,   0x1000,
+factory,  app,  factory, 0x10000,  0x200000,
+spiffs,   data, spiffs,  0x210000, 0x5F0000,
