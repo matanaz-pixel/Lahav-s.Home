@@ -26,6 +26,8 @@ enum StrId : uint8_t {
   S_SET, S_CHANGE, S_PRESSCANCEL, S_BT_IDLE_BTN,   // button-only boards (Plus2)
   // shift mode
   S_SHIFT, S_START, S_READ, S_NOTE, S_END, S_SH_NONE, S_SH_HOLDA, S_SH_HINT_CORE, S_SH_HINT_STICK, S_SH_NOTES, S_SH_QUEUE, S_SH_BATT, S_SH_STORE, S_SH_LAST, S_SH_READY, S_SH_NOLAST, S_SH_OFFLINE, S_SH_LOWSTORE, S_SH_WRITEERR, S_SH_LOWBATT, S_SH_SUMREADY, S_REC_NOTE, S_ENDQ, S_ENDQ_CORE, S_ENDQ_STICK, S_Q1, S_Q2, S_Q3, S_Q4, S_Q_HINT_CORE, S_Q_HINT_STICK, S_SENDING, S_SUMMARIZING, S_SAVED_OFFLINE, S_ERR_NOSTORE, S_NO_SUMMARY,
+  // hub (car <-> pocket)
+  S_PEER, S_PEER_NONE, S_LINK, S_ONLINE, S_NEVER, S_INCAR, S_YES, S_NO, S_ACTIVE, S_IDLE_W, S_DASH, S_CAR_ALERT, S_FINDME,
   S_COUNT
 };
 
@@ -133,6 +135,19 @@ static const StrRow kStrings[S_COUNT] = {
   /* S_SAVED_OFFLINE */ {"Saved. Sends when online", "נשמר. יישלח כשיש רשת"},
   /* S_ERR_NOSTORE */ {"No storage", "אין אחסון"},
   /* S_NO_SUMMARY */ {"No summary yet", "אין סיכום עדיין"},
+  /* S_PEER */ {"Pocket device", "מכשיר כיס"},
+  /* S_PEER_NONE */ {"none seen", "לא נראה"},
+  /* S_LINK */ {"Bridge link", "קשר לשרת"},
+  /* S_ONLINE */ {"online", "מחובר"},
+  /* S_NEVER */ {"never", "אף פעם"},
+  /* S_INCAR */ {"In car", "ברכב"},
+  /* S_YES */ {"yes", "כן"},
+  /* S_NO */ {"no", "לא"},
+  /* S_ACTIVE */ {"active", "פעילה"},
+  /* S_IDLE_W */ {"idle", "לא פעילה"},
+  /* S_DASH */ {"-", "-"},
+  /* S_CAR_ALERT */ {"CRASH ALERT FROM CAR", "התראת פגיעה מהרכב"},
+  /* S_FINDME */ {"Here I am!", "אני כאן!"},
 };
 
 enum Lang : uint8_t { LANG_EN = 0, LANG_HE = 1 };

@@ -18,6 +18,9 @@
 #include "face.h"
 #include "layout.h"
 #include "shift.h"
+#include "bridge_net.h"
+#include "wifi_mgr.h"
+#include "hub.h"
 #ifdef USE_A2DP_OUT
 #include "a2dp_out.h"
 #endif
@@ -29,12 +32,18 @@
 // ----------------------------------------------------------------------------
 // Types & globals
 // ----------------------------------------------------------------------------
-enum class St : uint8_t { IDLE, LISTEN, RECORD, THINK, REPLY, ERROR, CRASH, NOTE, SQ, SWAIT };   // NOTE/SQ/SWAIT: shift mode
+enum class St : uint8_t { IDLE, LISTEN, RECORD, THINK, REPLY, ERROR, CRASH, NOTE, SQ, SWAIT, PALERT, FIND };   // NOTE/SQ/SWAIT: shift mode; PALERT/FIND: hub (pocket device)
+#define HUB_SCREEN (HUB_ENABLED && !HUB_ROLE_POCKET)    // car device: extra "Pocket device" status screen
+enum Screen : uint8_t {
+  SC_FACE, SC_NOISE, SC_G, SC_TRIP,
 #if SHIFT_ENABLED
-enum Screen : uint8_t { SC_FACE, SC_NOISE, SC_G, SC_TRIP, SC_SHIFT, SC_SET, SC_COUNT };
-#else
-enum Screen : uint8_t { SC_FACE, SC_NOISE, SC_G, SC_TRIP, SC_SET, SC_COUNT };
+  SC_SHIFT,
 #endif
+#if HUB_SCREEN
+  SC_PEER,
+#endif
+  SC_SET, SC_COUNT
+};
 enum Align : uint8_t { AL_L, AL_C, AL_R };
 
 static constexpr uint16_t rgb(uint8_t r, uint8_t g, uint8_t b) { return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3); }
@@ -170,7 +179,10 @@ static bool fetchWav(const char* urlIn, uint8_t** outBuf, size_t* outLen) {
   http.setTimeout(8000);
   bool ok = false;
   uint8_t* buf = nullptr;
-  if (http.begin(*cl, url) && http.GET() == 200) {
+  const String bb = bridge::base();
+  const bool begun = http.begin(*cl, url);
+  if (begun && bb.length() && url.startsWith(bb)) bridge::addAuth(http);    // same origin as the bridge only
+  if (begun && http.GET() == 200) {
     int len = http.getSize();
     if (len <= (int)AUDIO_MAX_BYTES && len != 0) {
       size_t cap = len > 0 ? (size_t)len : (size_t)AUDIO_MAX_BYTES;
@@ -233,7 +245,7 @@ static bool fetchMerged(const std::vector<String>& urls, uint8_t** outBuf, size_
 static StrId doRequest() {
   if (strlen(BRIDGE_URL) == 0) return S_ERR_NOBRIDGE;
   if (WiFi.status() != WL_CONNECTED) {
-    if (strlen(WIFI_SSID) == 0) return S_ERR_NOWIFI;
+    if (wifimgr::configured() == 0) return S_ERR_NOWIFI;
     uint32_t t = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - t < 6000) vTaskDelay(100 / portTICK_PERIOD_MS);
     if (WiFi.status() != WL_CONNECTED) return S_ERR_NOWIFI;
@@ -248,6 +260,8 @@ static StrId doRequest() {
   StrId result = S_ERR_BRIDGE;
   if (http.begin(*cl, BRIDGE_URL)) {
     http.addHeader("Content-Type", "audio/wav");
+    bridge::addAuth(http);                              // Bearer token (BRIDGE_TOKEN), if configured
+    if (hub::deviceId()[0]) http.addHeader("X-Device-Id", hub::deviceId());   // lets the bridge route hub voice commands
     int code = http.POST(job.wav, job.wavLen);
     if (code == 200) {
       char* resp = (char*)bigAlloc(RESP_MAX_BYTES);
@@ -530,7 +544,7 @@ static void startNet(uint32_t now) {
 }
 
 // Takes ownership of a downloaded WAV (16-bit mono) and plays it: A2DP kit first, internal speaker as fallback.
-static void startPlayback(uint8_t* buf, size_t len) {
+static void startPlayback(uint8_t* buf, size_t len, bool allowBt = true) {
   playBuf = buf; playLen = len;
   playDataOff = 44; playDataLen = playLen > 44 ? playLen - 44 : 0; playRate = 16000;
   for (size_t i = 12; i + 8 < playLen && i < 200; i++) {            // find "data" chunk
@@ -543,7 +557,7 @@ static void startPlayback(uint8_t* buf, size_t len) {
   bool onBt = false;
 #ifdef USE_A2DP_OUT
   uint16_t ch, bits; memcpy(&ch, playBuf + 22, 2); memcpy(&bits, playBuf + 34, 2);
-  if (ch == 1 && bits == 16 && playDataLen >= 3200 && !a2o::busy())
+  if (allowBt && ch == 1 && bits == 16 && playDataLen >= 3200 && !a2o::busy())
     onBt = viaBt = a2o::play((const int16_t*)(playBuf + playDataOff), playDataLen / 2, playRate);
 #endif
   if (!onBt) {
@@ -618,7 +632,7 @@ static uint8_t* qBuf = nullptr; static size_t qLen = 0; static char qUrl[200]; s
 static std::vector<String> sumUrls;              // spoken summary chunks (audio_urls) of the summary being fetched
 
 static bool shiftPocket(uint32_t now) {
-  return shift::active() && st != St::CRASH && now - lastActivity > SHIFT_POCKET_MS;
+  return shift::active() && st != St::CRASH && st != St::PALERT && st != St::FIND && now - lastActivity > SHIFT_POCKET_MS;
 }
 
 // Feedback that works in a pocket: vibration on Core2, short beeps on buzzer boards ('s' short, 'l' long, '.' pause).
@@ -749,7 +763,7 @@ static void startReadLast(uint32_t now) {
 
 // Returns true when the key was consumed by shift mode.
 static bool shiftAction(char which, uint32_t now) {
-  if (st == St::CRASH) return false;
+  if (st == St::CRASH || st == St::PALERT || st == St::FIND) return false;
   const bool on = shift::active();
   if (st == St::IDLE && screen == SC_SHIFT) {        // touch zones / B-hold on the Shift screen
     if (which == 'A') { if (on) which = 'N'; else return true; }
@@ -822,7 +836,7 @@ static void shiftLoop(uint32_t now) {
 #if SHIFT_SPOKEN_QUESTIONS
         if (qState == 2) {
           qState = 0;
-          if (qFor == sqIdx && !playBuf && !shift::recording()) startPlayback(qBuf, qLen);
+          if (qFor == sqIdx && !playBuf && !shift::recording()) startPlayback(qBuf, qLen, false);   // questions: own speaker, never the kit
           else { heap_caps_free(qBuf); }
           qBuf = nullptr;
         } else if (qState == 3) qState = 0;
@@ -848,6 +862,105 @@ static void shiftLoop(uint32_t now) {
 }
 #else
 static inline bool shiftPocket(uint32_t) { return false; }
+#endif
+
+// ----------------------------------------------------------------------------
+// Hub (car <-> pocket): UI side. Network I/O (heartbeat, commands, acks, alert) is in hub.cpp. HUB_ENABLED=0 compiles it out.
+//   car    : READ_SUMMARY -> speaks the finished shift summary (same path as "Read last summary").
+//   pocket : VIBRATE (crash alert from the car) / FIND_ME -> strong vibration / beeps until a button is pressed.
+// A command is ACKED when it is accepted. If the device is busy the command stays pending (un-acked) and is retried
+// on the next loop pass; the bridge also redelivers it (up to 3 times, 10 min TTL).
+// ----------------------------------------------------------------------------
+#if HUB_ENABLED
+static bool hubVib = false;                      // Core2 has a vibration motor; the Plus2 only a buzzer
+static uint32_t hubVibOff = 0, hubPulseAt = 0, hubUntil = 0, hubBattAt = 0, hubSecAt = 0;
+static int hubBatt = -1;
+static float palertG = -1;
+
+static void alertBeep(int freq, int ms) {        // ignores the volume setting: an alert must be heard
+  audSpk();
+  M5.Speaker.setVolume(255);
+  M5.Speaker.tone(freq, ms);
+  uint32_t t = millis();
+  while (M5.Speaker.isPlaying() && millis() - t < (uint32_t)ms + 200) delay(5);
+  audMic();
+}
+
+static void hubPulse(uint32_t now, bool find) {
+  if (hubVib) { M5.Power.setVibration(255); hubVibOff = now + (find ? 300 : 500); }
+  if (find) alertBeep(2600, 150); else alertBeep(2400, 250);
+}
+
+// Same preparation as a local crash: save a running note, stop audio, forget a pending request.
+static void hubInterrupt(uint32_t now) {
+#if SHIFT_ENABLED
+  if (st == St::NOTE) noteStop(now, true);
+  if (st == St::SWAIT) shift::finishDetach();
+#endif
+  stopPlayback(); freeRec();
+  if (st == St::THINK) job.orphan = true;
+  if (aud != Aud::MIC) audMic();
+  lastActivity = now;
+}
+
+static void startPalert(float g, uint32_t now) {
+  hubInterrupt(now);
+  palertG = g; hubPulseAt = 0; hubUntil = now + (uint32_t)HUB_PALERT_MAX_S * 1000UL;
+  setSt(St::PALERT, now);
+}
+
+static void startFind(uint16_t durS, uint32_t now) {
+  hubInterrupt(now);
+  hubPulseAt = 0; hubUntil = now + (uint32_t)durS * 1000UL;
+  setSt(St::FIND, now);
+}
+
+// Every loop(): feed the hub task, run the alert states, take at most one command.
+static void hubLoop(uint32_t now) {
+  if (hubVibOff && now >= hubVibOff) { M5.Power.setVibration(0); hubVibOff = 0; }
+  // heartbeat inputs: the battery is read here, the I2C bus belongs to the main loop (the hub task never touches M5)
+  if (!hubBattAt || now - hubBattAt > 10000) { hubBattAt = now; hubBatt = (int)M5.Power.getBatteryLevel(); }
+  if (now - hubSecAt >= 1000) { hubSecAt = now; hub::setLocal(hubBatt, (int)shift::status().pending, shift::active()); }
+  bool busy = st == St::NOTE;                    // never poll over a running recording
+#ifdef USE_A2DP_OUT
+  busy = busy || a2o::busy() || testRunning;
+#endif
+  hub::hold(busy);
+
+  if (st == St::PALERT || st == St::FIND) {
+    if ((int32_t)(now - hubUntil) >= 0) { toIdle(now); }
+    else if (now >= hubPulseAt) { hubPulse(now, st == St::FIND); hubPulseAt = millis() + (st == St::FIND ? 700 : 1100); }
+  }
+
+  hub::Cmd c;
+  if (!hub::next(c)) return;
+  switch (c.type) {
+    case hub::CmdType::READ_SUMMARY: {
+#if SHIFT_ENABLED
+      bool free = st == St::IDLE && job.status == 0 && !playBuf && !shift::recording();
+#ifdef USE_A2DP_OUT
+      free = free && !a2o::busy() && !testRunning && !btPicking;
+#endif
+      if (!free) return;                         // busy: stay pending and un-acked
+      hub::accept(c.id);
+      lastActivity = now;
+      startSummary(c.spoken, c.audioUrls, now);
+#else
+      hub::accept(c.id);                         // no shift module in this build: nothing to read
+#endif
+      break;
+    }
+    case hub::CmdType::VIBRATE:
+      if (st == St::CRASH) return;               // a local crash screen is already shouting
+      hub::accept(c.id); startPalert(c.g, now);
+      break;
+    case hub::CmdType::FIND_ME:
+      if (st == St::CRASH) return;
+      hub::accept(c.id); startFind(c.durationS, now);
+      break;
+    default: hub::accept(c.id); break;
+  }
+}
 #endif
 
 // ----------------------------------------------------------------------------
@@ -881,6 +994,7 @@ static void onAction(char which, uint32_t now) {
 #endif
   switch (st) {
     case St::NOTE: case St::SQ: case St::SWAIT: return;        // shift mode owns these states
+    case St::PALERT: case St::FIND: toIdle(now); return;       // hub alert / "find me": any button silences it
     case St::CRASH: cancelCrash(now); return;
     case St::ERROR: toIdle(now); return;
     case St::LISTEN: case St::RECORD: if (which == 'A' || which == 'T') toIdle(now); return;
@@ -1022,7 +1136,15 @@ static void processFrame(const int16_t* f, uint32_t now) {
 // ----------------------------------------------------------------------------
 // IMU
 // ----------------------------------------------------------------------------
+static float crashPeak = 0;                      // highest |a| (g) seen during the current impact
+#if HUB_ENABLED
+static bool crashAlertSent = false;              // HUB_ALERT_ON_TIMEOUT_ONLY: the late alert goes out once
+#endif
 static void startCrash(uint32_t now) {
+#if HUB_ENABLED
+  crashAlertSent = false;
+  if (hub::isCar() && !HUB_ALERT_ON_TIMEOUT_ONLY) { hub::alert(crashPeak); crashAlertSent = true; }   // tell the pocket device
+#endif
 #if SHIFT_ENABLED
   if (st == St::NOTE) noteStop(now, true);
   if (st == St::SWAIT) shift::finishDetach();
@@ -1061,10 +1183,12 @@ static void pollImu(uint32_t now) {
   if (turnArmed && fabsf(latG) > TURN_G) { turnArmed = false; trip.turns++; tripDirty = true; lastActivity = now; }
 
   // crash: |a| > 4 g for >= 30 ms
+  const bool noCrashHere = HUB_ENABLED && HUB_ROLE_POCKET && HUB_POCKET_NO_CRASH && shift::active();   // a pocket knocks around
   if (mag > CRASH_G) {
+    if (mag > crashPeak) crashPeak = mag;
     if (!crashHigh) { crashHigh = true; crashHighSince = now; }
-    else if (now - crashHighSince >= 30 && st != St::CRASH && now > crashRefract) startCrash(now);
-  } else crashHigh = false;
+    else if (now - crashHighSince >= 30 && st != St::CRASH && now > crashRefract && !noCrashHere) startCrash(now);
+  } else { crashHigh = false; crashPeak = 0; }
 }
 
 // ----------------------------------------------------------------------------
@@ -1250,6 +1374,24 @@ static void renderScreen(uint32_t now) {
       break;
     }
 #endif
+#if HUB_SCREEN
+    case SC_PEER: {
+      hub::Peer pr = hub::peer();
+      const uint16_t amber = rgb(255, 170, 40), red = rgb(255, 80, 60);
+      int y = L.rowY0;
+      row(y, ui(S_LINK), ui(hub::online() ? S_ONLINE : S_SH_OFFLINE), k.fg, hub::online() ? k.acc : amber); y += L.rowPitch;
+      uint32_t age = pr.valid ? pr.lastSeenS + (now - pr.receivedMs) / 1000 : 0;
+      String ps = !pr.valid ? String(ui(S_PEER_NONE)) : (age <= 90 ? String(ui(S_ONLINE)) : String(ui(S_SH_OFFLINE)) + " " + String(age < 3600 ? (int)(age / 60) : 99) + "m");
+      row(y, ui(S_PEER), ps, k.fg, (pr.valid && age <= 90) ? k.acc : amber); y += L.rowPitch;
+      row(y, ui(S_SH_BATT), pr.valid && pr.battery >= 0 ? String((int)pr.battery) + "%" : String("--"), k.fg,
+          (pr.valid && pr.battery >= 0 && pr.battery < SHIFT_LOW_BATT_PCT) ? red : k.acc); y += L.rowPitch;
+      row(y, ui(S_SH_QUEUE), pr.valid && pr.notes >= 0 ? String((long)pr.notes) : String("--"), k.fg, (pr.valid && pr.notes > 0) ? amber : k.acc); y += L.rowPitch;
+      row(y, ui(S_SHIFT), pr.valid && pr.shiftActive >= 0 ? ui(pr.shiftActive ? S_ACTIVE : S_IDLE_W) : ui(S_DASH), k.fg, k.acc); y += L.rowPitch;
+      row(y, ui(S_INCAR), ui(hub::inCar() ? S_YES : S_NO), k.fg, hub::inCar() ? k.acc : k.fg);
+      bottomBar(S_TALK, S_NEXT, S_DASH);
+      break;
+    }
+#endif
     case SC_SET: {
 #ifdef USE_A2DP_OUT
       if (btPicking) {                            // scan results: pick the kit
@@ -1419,6 +1561,21 @@ static void renderOverlay(uint32_t now) {
       break;
     }
 #endif
+#if HUB_ENABLED
+    case St::PALERT: {
+      bool flash = (now / 400) % 2;
+      cv.fillScreen(flash ? rgb(200, 0, 0) : rgb(110, 0, 0));
+      uint16_t w = rgb(255, 255, 255);
+      say(ui(S_CAR_ALERT), L.cx(), L.crashY1, AL_C, L.compact ? 1 : 2, w);
+      if (palertG >= 0) { snprintf(b, sizeof(b), "%.1f g", palertG); say(b, L.cx(), L.crashY2, AL_C, 2, w, true); }
+      say(cancelHint(), L.cx(), L.crashHintY, AL_C, 2, w);
+      break;
+    }
+    case St::FIND:
+      drawFace(cv, L.cx(), L.thinkCy, L.faceS, Mood::HAPPY, now, k);
+      say(ui(S_FINDME), L.cx(), L.statusY, AL_C, 2, k.acc);
+      break;
+#endif
     case St::ERROR:
       drawFace(cv, L.cx(), L.errCy, L.errS, errInfo ? Mood::NEUTRAL : Mood::CONFUSED, now, k);
       say(ui(errId), L.cx(), L.errY, AL_C, 2, errInfo ? k.acc : rgb(255, 160, 80));
@@ -1474,13 +1631,17 @@ void setup() {
   memset(trail, 0, sizeof(trail));
   randomSeed(esp_random());
 
-  if (strlen(WIFI_SSID)) { WiFi.mode(WIFI_STA); WiFi.setAutoReconnect(true); WiFi.begin(WIFI_SSID, WIFI_PASS); }
+  wifimgr::begin();                                 // up to 4 networks (config.h), joins the strongest; no-op if none is set
   configTzTime(TZ_STRING, "pool.ntp.org");
 #if SHIFT_ENABLED
   haveVib = (M5.getBoard() == m5::board_t::board_M5StackCore2);
 #endif
   shift::setLang(g_lang);
   shift::begin();                                   // RTC -> clock, resume a shift that was running before a reboot
+#if HUB_ENABLED
+  hubVib = (M5.getBoard() == m5::board_t::board_M5StackCore2);
+  hub::begin();                                     // worker task: heartbeat / commands / alert (idle without Wi-Fi + bridge)
+#endif
 
   M5.Speaker.end();
   audMic();
@@ -1503,9 +1664,17 @@ void loop() {
 #if SHIFT_ENABLED
   shiftLoop(now);
 #endif
-  // Extension point for a future "hub" module (bridge heartbeat/poll + remote commands): add `hub::loop(now);` here.
-  // Commands would map onto existing actions: startReadLast(now) (read summary), haptic("...") (vibrate).
-  // Shared bridge plumbing (base URL, token, https client) is in bridge_net.h.
+  {
+    bool wbusy = false;                             // scanning for a Wi-Fi network would disturb a running A2DP stream
+#ifdef USE_A2DP_OUT
+    wbusy = a2o::busy() || testRunning;
+#endif
+    wifimgr::hold(wbusy);
+    wifimgr::loop(now);
+  }
+#if HUB_ENABLED
+  hubLoop(now);
+#endif
 
   const int16_t* f = nullptr;
   bool got = pollMic(&f);
@@ -1562,6 +1731,9 @@ void loop() {
         lastCrashBeep = now;
         beep(left > 0 ? 1500 : 2200, left > 0 ? 80 : 300);
       }
+#if HUB_ENABLED
+      if (left <= 0 && !crashAlertSent && hub::isCar()) { crashAlertSent = true; hub::alert(-1); }   // nobody answered "Are you OK?"
+#endif
       break;
     }
     default: break;

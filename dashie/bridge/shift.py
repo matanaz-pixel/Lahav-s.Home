@@ -87,7 +87,7 @@ def _auth_ok() -> bool:
 @bp.before_request
 def _guard():
     # הדף עצמו לא מכיל מידע; הקובץ הקולי מאומת בחתימה משלו.
-    if request.endpoint in ("shift.phone_page", "shift.spoken"):
+    if request.endpoint in ("shift.phone_page", "shift.spoken", "shift.question"):
         return None
     if not _auth_ok():
         return jsonify(status="error", error="unauthorized"), 401
@@ -650,6 +650,50 @@ def spoken(shift_id, n):
     if not p.is_file():
         return Response(status=404)
     return Response(p.read_bytes(), mimetype="audio/wav")
+
+
+# ---------------------------------------------------------------- שאלות סיכום מוקראות
+
+# חייב להתאים לטקסטים בקושחה (firmware/src/strings.h: S_Q1..S_Q4).
+WRAPUP_QUESTIONS = {
+    "he": ["איך עבר הקו?", "היו אירועים חריגים?", "איך כל עמדה?", "איך התנהלתי?"],
+    "en": ["How did the line run?", "Any incidents?", "How was each station?", "How did I handle things?"],
+}
+
+
+def question_url(n: int, lang: str) -> str:
+    base = request.host_url.rstrip("/")
+    u = f"{base}/shift/question/{n}.wav?lang={lang}"
+    if _token():
+        u += f"&t={_sign('_q', f'question_{n}_{lang}.wav')}"
+    return u
+
+
+@bp.get("/shift/question/<int:n>.wav")
+def question(n):
+    """TTS של אחת מארבע שאלות הסיכום. נשמר במטמון בדיסק (אותו קול ואותו מודל כמו ההקראה)."""
+    lang = request.args.get("lang", "he")
+    if lang not in WRAPUP_QUESTIONS:
+        return Response(status=404)
+    qs = WRAPUP_QUESTIONS[lang]
+    if not 1 <= n <= len(qs):
+        return Response(status=404)
+    # עם טוקן: או חתימה בקישור, או Authorization: Bearer (המכשיר שולח את ה-Bearer לשרת שלו)
+    if _token() and not _auth_ok() and not hmac.compare_digest(request.args.get("t", ""), _sign("_q", f"question_{n}_{lang}.wav")):
+        return Response(status=401)
+    voice = os.environ.get("ELEVENLABS_VOICE_ID") or "default"
+    model = os.environ.get("DASHIE_TTS_MODEL", "eleven_flash_v2_5")
+    cache = shifts_dir().parent / "question_cache" / f"q{n}_{lang}_{re.sub(r'[^A-Za-z0-9]', '', voice)}_{model}.wav"
+    if cache.is_file():
+        return Response(cache.read_bytes(), mimetype="audio/wav")
+    try:
+        wav = tts_wav(qs[n - 1])
+    except (requests.RequestException, RuntimeError):
+        return Response(status=502)
+    if not wav:
+        return Response(status=404)   # אין מפתח/קול: המכשיר נשאר עם טקסט
+    _write_atomic(cache, wav)
+    return Response(wav, mimetype="audio/wav")
 
 
 # ---------------------------------------------------------------- נקודות קצה

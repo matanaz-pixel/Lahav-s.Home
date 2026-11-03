@@ -11,6 +11,27 @@
 #define WIFI_PASS ""
 #endif
 
+// Up to 3 more networks (e.g. kitchen Wi-Fi at work + phone hotspot in the car). Dashie scans and joins the STRONGEST
+// network of the list (WIFI_SSID is entry 1). Leave empty to skip. Case-sensitive, 2.4 GHz only.
+#ifndef WIFI_SSID_2
+#define WIFI_SSID_2 ""
+#endif
+#ifndef WIFI_PASS_2
+#define WIFI_PASS_2 ""
+#endif
+#ifndef WIFI_SSID_3
+#define WIFI_SSID_3 ""
+#endif
+#ifndef WIFI_PASS_3
+#define WIFI_PASS_3 ""
+#endif
+#ifndef WIFI_SSID_4
+#define WIFI_SSID_4 ""
+#endif
+#ifndef WIFI_PASS_4
+#define WIFI_PASS_4 ""
+#endif
+
 // Voice bridge endpoint, e.g. "http://192.168.43.10:8787/voice" (empty = no assistant).
 // https:// URLs are accepted (certificate is NOT verified; fine for a LAN bridge).
 #ifndef BRIDGE_URL
@@ -140,10 +161,64 @@
 #define SHIFT_AUDIO_MAX_BYTES (2500 * 1024)   // Core2 / CoreS3: 8 MB PSRAM (~75 s)
 #endif
 #endif
-// 1 = read the 4 wrap-up questions aloud from GET <base>/shift/question/<n>.wav?lang=he|en. The current bridge has
-// no such endpoint, so this is off: the questions are shown on screen with a vibration.
+// 1 = read the 4 wrap-up questions aloud from GET <base>/shift/question/<n>.wav?lang=he|en (needs ELEVENLABS_API_KEY +
+// ELEVENLABS_VOICE_ID on the bridge, otherwise the bridge answers 404 and the question stays text + vibration).
+// Only boards that can speak (Core2/CoreS3 speaker, or Plus2 with A2DP) use it; the code falls back to text itself.
 #ifndef SHIFT_SPOKEN_QUESTIONS
-#define SHIFT_SPOKEN_QUESTIONS 0
+#define SHIFT_SPOKEN_QUESTIONS 1
 #endif
 // Plus2 has no SD slot: notes are stored in LittleFS (custom partition table, see platformio.ini) at 8 kHz.
 // Core2 / CoreS3 store 16 kHz notes on the SD card (LittleFS fallback when no card is inserted).
+
+// ---------------------------------------------------------------------------
+// Hub: two Dashies (car + pocket) coordinate through the bridge (POST /hub/hello = heartbeat + poll).
+// See bridge/README.md "Hub". Build with -DHUB_ENABLED=0 to compile it out (the Wi-Fi list stays).
+//   car    (Core2 on the dashboard): reads the finished shift summary when you get in, shows the pocket device's status,
+//          sends a crash alert to the pocket device.
+//   pocket (Plus2): vibrates / beeps on a crash alert from the car, and on "where is my pocket device?".
+// ---------------------------------------------------------------------------
+#ifndef HUB_ENABLED
+#define HUB_ENABLED 1
+#endif
+#ifndef HUB_ROLE_POCKET                    // 1 = pocket device, 0 = car device. Default: buttons-only boards (Plus2) are pocket.
+#ifdef DASHIE_BUTTONS_ONLY
+#define HUB_ROLE_POCKET 1
+#else
+#define HUB_ROLE_POCKET 0
+#endif
+#endif
+// SSID of the phone hotspot in the car. MUST equal HUB_CAR_SSID on the bridge. The bridge decides "you are in the car"
+// when both devices report this SSID. It also makes the pocket device poll fast only while it is on this network.
+#ifndef HUB_CAR_SSID
+#define HUB_CAR_SSID ""
+#endif
+#ifndef HUB_POLL_FAST_S                    // used until the bridge sends its own poll_s (car 10 s / pocket 20 s)
+#define HUB_POLL_FAST_S (HUB_ROLE_POCKET ? 20 : 10)
+#endif
+#ifndef HUB_POLL_SLOW_S                    // pocket device away from the car hotspot: poll rarely (battery: 200 mAh!)
+#define HUB_POLL_SLOW_S 60
+#endif
+#ifndef HUB_ALERT_ON_TIMEOUT_ONLY          // 0 = send the crash alert the moment the impact is detected (default)
+#define HUB_ALERT_ON_TIMEOUT_ONLY 0        // 1 = only if the 15 s "Are you OK?" countdown ends without being cancelled
+#endif
+#ifndef HUB_ALERT_RETRY_S                  // keep retrying the alert this long while Wi-Fi is down / the bridge unreachable
+#define HUB_ALERT_RETRY_S 90
+#endif
+#ifndef HUB_PALERT_MAX_S                   // pocket crash alert stops by itself after this long (battery)
+#define HUB_PALERT_MAX_S 120
+#endif
+#ifndef HUB_FIND_MAX_S                     // cap for find_me duration_s from the bridge
+#define HUB_FIND_MAX_S 60
+#endif
+#ifndef HUB_POCKET_NO_CRASH                // 1 = a pocket device does not run its own crash detection while a shift is active
+#define HUB_POCKET_NO_CRASH 1              // (a 4 g knock in a kitchen pocket must not start a 15 s alarm). Car devices unaffected.
+#endif
+#ifndef HUB_FW
+#define HUB_FW "dashie-hub-1"
+#endif
+
+// Buzzer-only boards (Plus2) have no speaker in the pocket / in the kitchen: wrap-up questions stay text + vibration/beeps.
+#ifdef DASHIE_NO_SPEAKER
+#undef SHIFT_SPOKEN_QUESTIONS
+#define SHIFT_SPOKEN_QUESTIONS 0
+#endif
