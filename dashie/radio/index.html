@@ -1,0 +1,876 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0e0c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>טיימר קשר</title>
+<style>
+/* פריסה: מסך עבודה אחד, כרטיס גדול לכל שולחן, ממוין לפי מי שהכי דחוף. כהה בכוונה, קריא ממרחק ובאור מטבח חזק. */
+:root {
+  --bg: #0b0e0c;
+  --panel: #141916;
+  --panel-2: #1c231f;
+  --line: #2b342f;
+  --fg: #f4f7f2;
+  --dim: #a3afa6;
+  --ok: #43e08a;
+  --warn: #ffb21f;
+  --bad: #ff5a4f;
+  --note: #ffd84a;
+  --focus: #8fd3ff;
+  --font: -apple-system, "Segoe UI", "Heebo", "Assistant", Roboto, "Arial Hebrew", Arial, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.4 var(--font);
+  min-height: 100vh;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: env(safe-area-inset-top, 0px) calc(24px + env(safe-area-inset-bottom, 0px));
+  -webkit-tap-highlight-color: transparent;
+}
+[hidden] { display: none !important; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* כותרת */
+.top {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--bg);
+  padding-block: 12px 10px;
+  display: grid; gap: 10px;
+}
+.top-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { font-size: 1.15rem; font-weight: 800; letter-spacing: .01em; margin: 0; }
+.conn {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 999px; padding: 6px 12px; font-size: .85rem; color: var(--dim);
+  min-width: 0;
+}
+.conn i { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); flex: none; }
+.conn[data-c="live"] i { background: var(--ok); }
+.conn[data-c="poll"] i { background: var(--warn); }
+.conn[data-c="off"] i { background: var(--bad); }
+.conn[data-c="demo"] i { background: var(--note); }
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.tab {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 11px 6px; font-weight: 700; color: var(--dim); min-height: 46px;
+}
+.tab[aria-selected="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+main { display: grid; gap: 18px; padding-top: 8px; }
+.view { display: grid; gap: 18px; min-width: 0; }
+
+/* תצוגה */
+.summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.summary p { margin: 0; color: var(--dim); font-size: .95rem; }
+.summary strong { color: var(--fg); font-variant-numeric: tabular-nums; }
+.btn {
+  border: 1px solid var(--line); background: var(--panel-2); border-radius: 12px;
+  padding: 10px 14px; min-height: 44px; font-weight: 700;
+}
+.btn.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.btn.ok { background: var(--ok); color: #04210f; border-color: var(--ok); }
+.btn.small { min-height: 40px; padding: 8px 12px; font-size: .9rem; }
+.btn:active { transform: translateY(1px); }
+
+.grid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+}
+.card {
+  --c: var(--ok);
+  container-type: inline-size;
+  background: var(--panel); border: 2px solid var(--c); border-radius: 16px;
+  padding: 12px; display: grid; gap: 6px; min-width: 0; position: relative;
+  overflow: hidden; user-select: none;
+}
+.card[data-state="warn"] { --c: var(--warn); }
+.card[data-state="bad"] { --c: var(--bad); }
+.card[data-state="late"] { --c: var(--bad); background: #2a1210; }
+.card[data-ring="1"] { animation: blink .8s steps(2, jump-none) infinite; }
+.card[data-unc="1"] { border-style: dashed; }
+@keyframes blink { 50% { background: #5a1a15; } }
+.c-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.c-table { font-size: 1.05rem; color: var(--dim); white-space: nowrap; }
+.c-table b { font-size: 1.7rem; color: var(--fg); font-weight: 800; font-variant-numeric: tabular-nums; }
+.badge {
+  background: var(--note); color: #2b2300; font-weight: 800; font-size: .75rem;
+  padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+}
+.c-item { font-size: 1.1rem; font-weight: 700; overflow-wrap: anywhere; min-height: 1.5em; }
+.c-time {
+  color: var(--c); font-weight: 800; line-height: 1; text-align: center;
+  font-size: clamp(2rem, 29cqw, 4.2rem); font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em; padding-block: 4px 0; unicode-bidi: isolate;
+}
+.c-time.long { font-size: clamp(1.6rem, 20cqw, 3rem); }
+.c-sub { text-align: center; color: var(--dim); font-size: .85rem; min-height: 1.2em; }
+.card[data-state="late"] .c-sub, .card[data-state="bad"] .c-sub { color: var(--c); font-weight: 700; }
+.bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--c); width: 100%; transform-origin: right center; }
+.c-unc, .c-act { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.c-act .btn, .c-unc .btn { padding: 8px 6px; min-height: 42px; font-size: .9rem; }
+
+.empty {
+  border: 2px dashed var(--line); border-radius: 16px; padding: 22px 18px;
+  color: var(--dim); display: grid; gap: 12px; justify-items: start;
+}
+.empty h2 { margin: 0; color: var(--fg); font-size: 1.15rem; }
+.empty p { margin: 0; max-width: 46ch; }
+.demo-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.panel h2 { margin: 0; font-size: 1rem; }
+.feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.feed li {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--panel-2); border-radius: 12px; padding: 8px 10px; min-width: 0;
+}
+.feed .what { min-width: 0; overflow-wrap: anywhere; }
+.feed .when { color: var(--dim); font-size: .8rem; display: block; }
+.feed li.gone .what { text-decoration: line-through; color: var(--dim); }
+.muted { color: var(--dim); font-size: .9rem; margin: 0; }
+.banner {
+  background: var(--note); color: #2b2300; font-weight: 800; border-radius: 12px; padding: 10px 12px; text-align: center;
+}
+.privacy {
+  display: flex; gap: 10px; align-items: flex-start; font-size: .85rem; color: var(--dim);
+  border-top: 1px solid var(--line); padding-top: 12px;
+}
+.privacy svg { flex: none; margin-top: 2px; }
+
+/* תחנת האזנה */
+.meter { position: relative; height: 34px; background: var(--panel-2); border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.meter .lvl { position: absolute; inset-block: 0; inset-inline-start: 0; width: 0; background: var(--ok); }
+.meter.hot .lvl { background: var(--warn); }
+.meter .thr { position: absolute; inset-block: 0; width: 3px; background: var(--fg); opacity: .85; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+.stats div { background: var(--panel-2); border-radius: 12px; padding: 8px 4px; }
+.stats b { display: block; font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+.stats span { color: var(--dim); font-size: .8rem; }
+.status-line { font-weight: 800; font-size: 1.1rem; }
+.status-line[data-s="rec"] { color: var(--warn); }
+.status-line[data-s="mute"] { color: var(--bad); }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn-row .btn { flex: 1 1 140px; }
+
+/* הגדרות וטפסים */
+.field { display: grid; gap: 6px; }
+.field label { color: var(--dim); font-size: .9rem; }
+input[type="text"], input[type="url"], input[type="password"], input[type="number"] {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px; min-height: 48px; width: 100%; min-width: 0;
+}
+input[dir="ltr"] { text-align: left; }
+.check { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.check input { width: 22px; height: 22px; accent-color: var(--ok); }
+
+.sheet-back { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.6); display: flex; align-items: flex-end; justify-content: center; }
+.sheet {
+  width: min(100%, 520px); background: var(--panel); border: 1px solid var(--line); border-radius: 20px 20px 0 0;
+  padding: 16px max(16px, env(safe-area-inset-left, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 12px;
+}
+.sheet h2 { margin: 0; font-size: 1.2rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; min-height: 42px; font-weight: 700; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .card[data-ring="1"] { animation: none; outline: 4px solid var(--bad); outline-offset: -4px; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <h1 class="brand">טיימר קשר</h1>
+    <span class="conn" id="conn" data-c="demo" role="status"><i></i><span id="connText">הדגמה</span></span>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="מצבים">
+    <button class="tab" role="tab" id="tab-display" aria-selected="true" data-view="display">תצוגה</button>
+    <button class="tab" role="tab" id="tab-listen" aria-selected="false" data-view="listen">האזנה</button>
+    <button class="tab" role="tab" id="tab-settings" aria-selected="false" data-view="settings">הגדרות</button>
+  </nav>
+</header>
+
+<main>
+  <!-- מצב עבודה -->
+  <section class="view" id="view-display" aria-labelledby="tab-display">
+    <div class="banner" id="soundBanner" hidden>הקש על המסך כדי להפעיל צליל</div>
+    <div class="summary">
+      <p id="summaryText">אין טיימרים פעילים</p>
+      <button class="btn primary" id="addBtn" type="button">+ טיימר</button>
+    </div>
+
+    <div class="grid" id="grid" aria-live="off"></div>
+
+    <div class="empty" id="empty">
+      <h2>אין טיימרים פעילים</h2>
+      <p>כשיישמע בקשר "תשע דקות ללזניה, שולחן שתים עשרה", יופיע כאן טיימר עם ספירה לאחור. אפשר גם להוסיף ידנית.</p>
+      <div class="demo-row" id="demoRow">
+        <button class="btn" type="button" data-demo="a">9 דק׳ ללזניה, שולחן 12</button>
+        <button class="btn" type="button" data-demo="b">שולחן 4, פסטה, 6 דק׳</button>
+        <button class="btn" type="button" data-demo="c">שולחן 7, ריזוטו, 20 שנ׳</button>
+        <button class="btn" type="button" data-demo="d">לא בטוח: שולחן 3, 5 דק׳</button>
+      </div>
+    </div>
+
+    <section class="panel" aria-labelledby="feedH">
+      <h2 id="feedH">מה זוהה</h2>
+      <ul class="feed" id="feed"></ul>
+      <p class="muted" id="feedEmpty">עדיין לא זוהו פקודות.</p>
+    </section>
+
+    <p class="privacy">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+      <span>האודיו לא נשמר. נשמרות רק פקודות מזוהות, כמו שולחן, מנה וזמן.</span>
+    </p>
+  </section>
+
+  <!-- תחנת האזנה -->
+  <section class="view" id="view-listen" hidden aria-labelledby="tab-listen">
+    <section class="panel">
+      <h2>תחנת האזנה</h2>
+      <p class="muted">הטלפון הזה מאזין לקשר דרך המיקרופון, חותך כל שידור למקטע קצר ושולח אותו לזיהוי. הניחו אותו ליד הרמקול של הקשר.</p>
+      <div class="status-line" id="listenStatus" data-s="idle">לא מאזין</div>
+      <div class="meter" id="meter" aria-hidden="true"><div class="lvl" id="lvl"></div><div class="thr" id="thr"></div></div>
+      <div class="stats">
+        <div><b id="stSeg">0</b><span>מקטעים</span></div>
+        <div><b id="stOk">0</b><span>נשלחו</span></div>
+        <div><b id="stFail">0</b><span>נכשלו</span></div>
+      </div>
+      <p class="muted" id="listenNote"></p>
+      <div class="btn-row">
+        <button class="btn primary" id="listenBtn" type="button">התחל האזנה</button>
+        <button class="btn" id="muteBtn" type="button" disabled>השתק</button>
+      </div>
+    </section>
+    <p class="privacy">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+      <span>האודיו לא נשמר בטלפון. כל מקטע נשלח לזיהוי ונמחק, ונשמרות רק פקודות מזוהות. ההקלטה פועלת רק כשלוחצים "התחל האזנה". עדכנו את הצוות שהקשר מתומלל.</span>
+    </p>
+  </section>
+
+  <!-- הגדרות -->
+  <section class="view" id="view-settings" hidden aria-labelledby="tab-settings">
+    <form class="panel" id="cfgForm" autocomplete="off">
+      <h2>חיבור</h2>
+      <div class="field">
+        <label for="cfgUrl">כתובת ה-bridge (ריק = מצב הדגמה)</label>
+        <input type="url" id="cfgUrl" dir="ltr" placeholder="https://radio.example.com" inputmode="url">
+      </div>
+      <div class="field">
+        <label for="cfgToken">טוקן</label>
+        <input type="password" id="cfgToken" dir="ltr" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="cfgStation">שם התחנה</label>
+        <input type="text" id="cfgStation" placeholder="למשל: פס חם">
+      </div>
+      <label class="check"><input type="checkbox" id="cfgAwake"> השאר את המסך דלוק</label>
+      <label class="check"><input type="checkbox" id="cfgSound"> צליל וויברציה בסוף הזמן</label>
+      <div class="btn-row">
+        <button class="btn primary" type="submit">שמור</button>
+        <button class="btn" type="button" id="cfgTest">בדוק חיבור</button>
+      </div>
+      <p class="muted" id="cfgMsg" role="status"></p>
+    </form>
+    <section class="panel">
+      <h2>הדגמה</h2>
+      <p class="muted">במצב הדגמה הטיימרים נשמרים רק בטלפון הזה, בלי שרת.</p>
+      <button class="btn" type="button" id="clearDemo">נקה טיימרים מקומיים</button>
+    </section>
+  </section>
+</main>
+
+<!-- הוספה ידנית -->
+<div class="sheet-back" id="sheetBack" hidden>
+  <form class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetH">
+    <h2 id="sheetH">טיימר חדש</h2>
+    <div class="two">
+      <div class="field"><label for="addTable">שולחן</label><input type="text" id="addTable" inputmode="numeric" required></div>
+      <div class="field"><label for="addMin">דקות</label><input type="number" id="addMin" min="1" max="180" step="1" value="9" required></div>
+    </div>
+    <div class="chips" id="chips">
+      <button class="chip" type="button" data-m="5">5</button>
+      <button class="chip" type="button" data-m="8">8</button>
+      <button class="chip" type="button" data-m="10">10</button>
+      <button class="chip" type="button" data-m="12">12</button>
+      <button class="chip" type="button" data-m="15">15</button>
+    </div>
+    <div class="field"><label for="addItem">מנה</label><input type="text" id="addItem" placeholder="לזניה"></div>
+    <div class="two">
+      <button class="btn" type="button" id="addCancel">ביטול</button>
+      <button class="btn primary" type="submit">התחל</button>
+    </div>
+  </form>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const pad = (n) => String(n).padStart(2, '0');
+
+  /* ---------- אחסון הגדרות (תמיד בתוך try/catch) ---------- */
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } }
+  };
+  const cfg = Object.assign({ url: '', token: '', station: '', stationId: '', keepAwake: true, sound: true }, store.get('radio.cfg', {}));
+  if (!cfg.stationId) cfg.stationId = 'st-' + Math.random().toString(36).slice(2, 8);
+  const saveCfg = () => store.set('radio.cfg', cfg);
+  saveCfg();
+  const baseUrl = () => cfg.url.trim().replace(/\/+$/, '');
+  const isRemote = () => !!baseUrl();
+
+  /* ---------- זמן ---------- */
+  let offset = 0; // הפרש בין שעון השרת לשעון הטלפון
+  const nowMs = () => Date.now() + offset;
+  function toMs(v) {
+    if (v == null) return null;
+    if (typeof v === 'number') return v < 1e11 ? v * 1000 : v;
+    if (/^\d+(\.\d+)?$/.test(String(v))) { const n = Number(v); return n < 1e11 ? n * 1000 : n; }
+    const t = Date.parse(v);
+    return Number.isNaN(t) ? null : t;
+  }
+  function fmt(secs) {
+    const s = Math.max(0, Math.floor(secs));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+    return h > 0 ? h + ':' + pad(m) + ':' + pad(r) : pad(m) + ':' + pad(r);
+  }
+  function durLabel(s) {
+    s = Math.round(s);
+    return s % 60 === 0 ? (s / 60) + ' דק׳' : (s < 60 ? s + ' שנ׳' : fmt(s));
+  }
+  function ago(ms) {
+    const s = Math.max(0, Math.round((nowMs() - ms) / 1000));
+    if (s < 60) return 'ממש עכשיו';
+    return 'לפני ' + Math.round(s / 60) + ' דק׳';
+  }
+
+  /* ---------- מודל טיימר ---------- */
+  function norm(t) {
+    const dur = Number(t.duration_s) || 0;
+    const ends = toMs(t.ends_at);
+    const started = toMs(t.started_at);
+    return {
+      id: String(t.id),
+      table: String(t.table ?? ''),
+      item: String(t.item ?? ''),
+      duration: dur,
+      ends: ends != null ? ends : (started != null ? started + dur * 1000 : nowMs() + dur * 1000),
+      started: started != null ? started : (ends != null ? ends - dur * 1000 : nowMs()),
+      status: String(t.status || 'running'),
+      unc: !!t.unconfirmed,
+      src: String(t.src || 'manual')
+    };
+  }
+  let timers = [];
+  const silenced = new Set(); // טיימרים שההתראה שלהם הושתקה בטלפון הזה
+
+  /* ---------- Backend מקומי (הדגמה) ---------- */
+  const Local = {
+    list: store.get('radio.demo', []),
+    save() { store.set('radio.demo', this.list); },
+    async add(p) {
+      const now = Date.now();
+      this.list.push({
+        id: 'd' + now.toString(36) + Math.random().toString(36).slice(2, 5),
+        table: p.table, item: p.item, duration_s: p.seconds,
+        started_at: now, ends_at: now + p.seconds * 1000,
+        status: 'running', unconfirmed: !!p.unconfirmed, src: p.src || 'manual'
+      });
+      this.save();
+    },
+    async act(id, what, body) {
+      const t = this.list.find((x) => x.id === id);
+      if (!t) return;
+      if (what === 'confirm') t.unconfirmed = false;
+      else if (what === 'cancel') this.list = this.list.filter((x) => x.id !== id);
+      else if (what === 'dismiss') t.status = 'dismissed';
+      else if (what === 'extend') {
+        const s = Number(body && body.seconds) || 60;
+        t.ends_at = Math.max(t.ends_at, Date.now()) + s * 1000;
+        t.duration_s += s;
+        t.status = 'running';
+        silenced.delete(id);
+      }
+      this.save();
+    },
+    async refresh() { applyState({ now: Date.now(), timers: this.list.map((x) => ({ ...x })) }); }
+  };
+
+  /* ---------- Backend מרוחק (bridge) ---------- */
+  const headers = (extra) => Object.assign({}, cfg.token ? { Authorization: 'Bearer ' + cfg.token } : {}, extra || {});
+  async function req(path, method, body) {
+    const res = await fetch(baseUrl() + path, {
+      method: method || 'GET',
+      headers: headers(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      cache: 'no-store'
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const ct = res.headers.get('content-type') || '';
+    return ct.includes('json') ? res.json() : null;
+  }
+  const Remote = {
+    async add(p) { await req('/radio/timers', 'POST', { table: p.table, item: p.item, seconds: p.seconds }); },
+    async act(id, what, body) {
+      await req('/radio/timers/' + encodeURIComponent(id) + '/' + what, 'POST', body || {});
+      if (what === 'extend') silenced.delete(id);
+    },
+    async refresh() { applyState(await req('/radio/state')); }
+  };
+  const backend = () => (isRemote() ? Remote : Local);
+
+  function applyState(st) {
+    if (!st || !Array.isArray(st.timers)) return;
+    const sv = toMs(st.now);
+    if (sv != null && isRemote()) offset = sv - Date.now();
+    else offset = 0;
+    timers = st.timers.map(norm).filter((t) => t.status !== 'cancelled');
+    const ids = new Set(timers.map((t) => t.id));
+    silenced.forEach((id) => { if (!ids.has(id)) silenced.delete(id); });
+    timers.filter((t) => t.status === 'dismissed').forEach((t) => silenced.add(t.id));
+    syncCards();
+    tick();
+  }
+
+  async function doAct(id, what, body) {
+    try { await backend().act(id, what, body); } catch (e) { setConn('off'); }
+    try { await backend().refresh(); } catch (e) { setConn('off'); }
+  }
+  async function doAdd(p) {
+    try { await backend().add(p); } catch (e) { setConn('off'); }
+    try { await backend().refresh(); } catch (e) { setConn('off'); }
+  }
+
+  /* ---------- חיבור: SSE עם fallback ל-polling ---------- */
+  let es = null, sseOk = false, retryT = null, retryN = 0, pollT = null;
+  const connLabel = { live: 'מחובר', poll: 'סקירה כל כמה שניות', off: 'מנותק', demo: 'הדגמה' };
+  function setConn(c) {
+    const el = $('#conn');
+    el.dataset.c = c;
+    $('#connText').textContent = connLabel[c] || c;
+  }
+  function stopNet() {
+    if (es) { es.close(); es = null; }
+    sseOk = false;
+    clearTimeout(retryT); clearInterval(pollT);
+  }
+  async function pollOnce() {
+    try {
+      await Remote.refresh();
+      if (!sseOk) setConn('poll');
+    } catch (e) { if (!sseOk) setConn('off'); }
+  }
+  function openSSE() {
+    if (!isRemote() || typeof EventSource === 'undefined') return;
+    const q = cfg.token ? '?token=' + encodeURIComponent(cfg.token) : '';
+    try { es = new EventSource(baseUrl() + '/radio/stream' + q); } catch (e) { return; }
+    const onMsg = (ev) => {
+      try {
+        const d = JSON.parse(ev.data);
+        if (d && Array.isArray(d.timers)) { applyState(d); return; }
+      } catch (e) { /* לא JSON */ }
+      pollOnce();
+    };
+    es.onopen = () => { sseOk = true; retryN = 0; setConn('live'); };
+    es.onmessage = onMsg;
+    es.addEventListener('state', onMsg);
+    es.onerror = () => {
+      sseOk = false;
+      if (es) { es.close(); es = null; }
+      setConn('poll');
+      retryN = Math.min(retryN + 1, 5);
+      clearTimeout(retryT);
+      retryT = setTimeout(openSSE, Math.min(30000, 1000 * 2 ** retryN));
+    };
+  }
+  function connect() {
+    stopNet();
+    if (!isRemote()) { setConn('demo'); Local.refresh(); return; }
+    setConn('poll');
+    pollOnce();
+    openSSE();
+    pollT = setInterval(() => { if (!sseOk) pollOnce(); }, 2500);
+  }
+
+  /* ---------- צליל וויברציה ---------- */
+  const dbg = (window.__radio = { beeps: 0, vibes: 0, segments: [] });
+  let actx = null, alarmT = null;
+  function unlockAudio() {
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume();
+    } catch (e) { /* ignore */ }
+    $('#soundBanner').hidden = true;
+  }
+  ['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, unlockAudio, { passive: true }));
+  function beep() {
+    dbg.beeps++;
+    if (cfg.sound) {
+      try { if (navigator.vibrate) { navigator.vibrate([300, 150, 300]); dbg.vibes++; } } catch (e) { /* ignore */ }
+    }
+    if (!cfg.sound) return;
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state !== 'running') { actx.resume(); $('#soundBanner').hidden = actx.state === 'running'; }
+      const t0 = actx.currentTime;
+      [0, 0.22, 0.44].forEach((d) => {
+        const o = actx.createOscillator(), g = actx.createGain();
+        o.type = 'square'; o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, t0 + d);
+        g.gain.exponentialRampToValueAtTime(0.35, t0 + d + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.16);
+        o.connect(g); g.connect(actx.destination);
+        o.start(t0 + d); o.stop(t0 + d + 0.18);
+      });
+    } catch (e) { /* ignore */ }
+  }
+  function updateAlarm(anyRinging) {
+    if (anyRinging && !alarmT) { beep(); alarmT = setInterval(beep, 2600); }
+    if (!anyRinging && alarmT) { clearInterval(alarmT); alarmT = null; }
+  }
+
+  /* ---------- כרטיסים ---------- */
+  const grid = $('#grid');
+  const cards = new Map();
+  function buildCard(t) {
+    const el = document.createElement('article');
+    el.className = 'card';
+    el.dataset.id = t.id;
+    el.innerHTML =
+      '<div class="c-head"><span class="c-table">שולחן <b></b></span><span class="badge" hidden>לא בטוח</span></div>' +
+      '<div class="c-item"></div>' +
+      '<div class="c-time" dir="ltr"></div>' +
+      '<div class="c-sub"></div>' +
+      '<div class="bar"><i></i></div>' +
+      '<div class="c-unc" hidden><button class="btn ok" type="button" data-act="confirm">אשר</button><button class="btn" type="button" data-act="cancel">בטל</button></div>' +
+      '<div class="c-act"><button class="btn" type="button" data-act="extend">+1 דק׳</button><button class="btn" type="button" data-act="remove">מחק</button></div>';
+    el.addEventListener('click', (ev) => {
+      const b = ev.target.closest('button[data-act]');
+      if (b) {
+        ev.stopPropagation();
+        const id = el.dataset.id, a = b.dataset.act;
+        if (a === 'extend') doAct(id, 'extend', { seconds: 60 });
+        else if (a === 'remove' || a === 'cancel') doAct(id, 'cancel');
+        else if (a === 'confirm') doAct(id, 'confirm');
+        return;
+      }
+      if (el.dataset.ring === '1') { silenced.add(el.dataset.id); doAct(el.dataset.id, 'dismiss'); tick(); }
+    });
+    return el;
+  }
+  function syncCards() {
+    const ids = new Set(timers.map((t) => t.id));
+    cards.forEach((el, id) => { if (!ids.has(id)) { el.remove(); cards.delete(id); } });
+    timers.forEach((t) => {
+      let el = cards.get(t.id);
+      if (!el) { el = buildCard(t); cards.set(t.id, el); grid.appendChild(el); }
+      $('.c-table b', el).textContent = t.table;
+      $('.c-item', el).textContent = t.item || 'ללא שם';
+      $('.badge', el).hidden = !t.unc;
+      $('.c-unc', el).hidden = !t.unc;
+      $('.c-act', el).hidden = t.unc;
+      el.dataset.unc = t.unc ? '1' : '0';
+    });
+    $('#empty').hidden = timers.length > 0;
+    renderFeed();
+  }
+  function stateOf(remSec) {
+    if (remSec <= 0) return 'late';
+    if (remSec <= 30) return 'bad';
+    if (remSec <= 120) return 'warn';
+    return 'ok';
+  }
+  function tick() {
+    const now = nowMs();
+    const rows = timers.map((t) => ({ t, rem: (t.ends - now) / 1000 }));
+    rows.sort((a, b) => a.rem - b.rem);
+    let ringing = false, next = null;
+    rows.forEach((r, i) => {
+      const el = cards.get(r.t.id);
+      if (!el) return;
+      const secs = r.rem > 0 ? Math.ceil(r.rem) : Math.floor(-r.rem);
+      const st = stateOf(r.rem > 0 ? Math.ceil(r.rem) : 0);
+      const ring = r.rem <= 0 && !silenced.has(r.t.id) && !r.t.unc;
+      if (ring) ringing = true;
+      el.dataset.state = st;
+      el.dataset.ring = ring ? '1' : '0';
+      el.style.order = String(i);
+      const time = $('.c-time', el);
+      time.textContent = (r.rem <= 0 ? '+' : '') + fmt(secs);
+      time.classList.toggle('long', secs >= 3600);
+      $('.c-sub', el).textContent = r.rem <= 0 ? (ring ? 'מוכן! הקש להשתקה' : 'באיחור') : (st === 'bad' ? 'עוד רגע' : 'נותר');
+      const frac = r.t.duration > 0 ? Math.min(1, Math.max(0, r.rem / r.t.duration)) : 0;
+      $('.bar i', el).style.transform = 'scaleX(' + frac.toFixed(4) + ')';
+      if (r.rem > 0 && !r.t.unc && !next) next = r;
+    });
+    updateAlarm(ringing);
+    const n = timers.length;
+    $('#summaryText').innerHTML = n === 0 ? 'אין טיימרים פעילים'
+      : '<strong>' + n + '</strong> טיימרים' + (next ? ' · הבא: שולחן <strong>' + next.t.table + '</strong> בעוד <strong dir="ltr">' + fmt(Math.ceil(next.rem)) + '</strong>' : '');
+    $$('#feed .when').forEach((el) => { const s = Number(el.dataset.started); if (s) el.textContent = ago(s); });
+  }
+  setInterval(tick, 250);
+
+  /* ---------- מה זוהה ---------- */
+  function renderFeed() {
+    const list = timers.filter((t) => t.src !== 'manual').sort((a, b) => b.started - a.started).slice(0, 5);
+    const ul = $('#feed');
+    ul.innerHTML = '';
+    list.forEach((t) => {
+      const li = document.createElement('li');
+      li.innerHTML = '<div class="what"></div><button class="btn small" type="button">בטל</button>';
+      const w = $('.what', li);
+      w.textContent = (t.item || 'ללא שם') + ' · שולחן ' + t.table + ' · ' + durLabel(t.duration) + (t.unc ? ' · לא בטוח' : '');
+      const when = document.createElement('span');
+      when.className = 'when'; when.dataset.started = String(t.started); when.textContent = ago(t.started);
+      w.appendChild(when);
+      $('button', li).addEventListener('click', () => doAct(t.id, 'cancel'));
+      ul.appendChild(li);
+    });
+    $('#feedEmpty').hidden = list.length > 0;
+  }
+
+  /* ---------- הוספה ידנית ---------- */
+  const sheetBack = $('#sheetBack');
+  function openSheet() { sheetBack.hidden = false; $('#addTable').focus(); }
+  function closeSheet() { sheetBack.hidden = true; $('#addBtn').focus(); }
+  $('#addBtn').addEventListener('click', openSheet);
+  $('#addCancel').addEventListener('click', closeSheet);
+  sheetBack.addEventListener('click', (e) => { if (e.target === sheetBack) closeSheet(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !sheetBack.hidden) closeSheet(); });
+  $('#chips').addEventListener('click', (e) => { const b = e.target.closest('[data-m]'); if (b) $('#addMin').value = b.dataset.m; });
+  $('#sheet').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const table = $('#addTable').value.trim();
+    const min = Number($('#addMin').value);
+    if (!table || !(min > 0)) return;
+    doAdd({ table, item: $('#addItem').value.trim(), seconds: Math.round(min * 60), src: 'manual' });
+    $('#addTable').value = ''; $('#addItem').value = '';
+    closeSheet();
+  });
+
+  /* ---------- הדגמה ---------- */
+  const DEMOS = {
+    a: { table: '12', item: 'לזניה', seconds: 540 },
+    b: { table: '4', item: 'פסטה', seconds: 360 },
+    c: { table: '7', item: 'ריזוטו', seconds: 20 },
+    d: { table: '3', item: 'פיצה', seconds: 300, unconfirmed: true }
+  };
+  $('#demoRow').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-demo]');
+    if (!b) return;
+    const d = DEMOS[b.dataset.demo];
+    if (isRemote()) doAdd({ table: d.table, item: d.item, seconds: d.seconds });
+    else doAdd({ ...d, src: 'radio-demo' });
+  });
+  $('#clearDemo').addEventListener('click', () => { Local.list = []; Local.save(); if (!isRemote()) Local.refresh(); $('#cfgMsg').textContent = 'הטיימרים המקומיים נמחקו.'; });
+
+  /* ---------- טאבים ---------- */
+  function showView(v) {
+    $$('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.view === v)));
+    $$('.view').forEach((s) => { s.hidden = s.id !== 'view-' + v; });
+    try { history.replaceState(null, '', '#' + v); } catch (e) { /* ignore */ }
+  }
+  $$('.tab').forEach((t) => t.addEventListener('click', () => showView(t.dataset.view)));
+  const h0 = location.hash.slice(1);
+  if (['display', 'listen', 'settings'].includes(h0)) showView(h0);
+
+  /* ---------- הגדרות ---------- */
+  function fillCfg() {
+    $('#cfgUrl').value = cfg.url; $('#cfgToken').value = cfg.token; $('#cfgStation').value = cfg.station;
+    $('#cfgAwake').checked = !!cfg.keepAwake; $('#cfgSound').checked = !!cfg.sound;
+  }
+  fillCfg();
+  $('#cfgForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    cfg.url = $('#cfgUrl').value.trim(); cfg.token = $('#cfgToken').value;
+    cfg.station = $('#cfgStation').value.trim();
+    cfg.keepAwake = $('#cfgAwake').checked; cfg.sound = $('#cfgSound').checked;
+    saveCfg();
+    timers = []; syncCards();
+    connect(); lock();
+    $('#cfgMsg').textContent = cfg.url ? 'נשמר. מתחבר…' : 'נשמר. מצב הדגמה.';
+  });
+  $('#cfgTest').addEventListener('click', async () => {
+    const url = $('#cfgUrl').value.trim().replace(/\/+$/, '');
+    if (!url) { $('#cfgMsg').textContent = 'אין כתובת, זה מצב הדגמה.'; return; }
+    try {
+      const res = await fetch(url + '/radio/state', { headers: $('#cfgToken').value ? { Authorization: 'Bearer ' + $('#cfgToken').value } : {}, cache: 'no-store' });
+      $('#cfgMsg').textContent = res.ok ? 'החיבור תקין.' : 'השרת ענה ' + res.status + '. בדקו טוקן וכתובת.';
+    } catch (e) { $('#cfgMsg').textContent = 'אין חיבור לשרת. בדקו כתובת, HTTPS ו-CORS.'; }
+  });
+
+  /* ---------- מסך דלוק ---------- */
+  let wl = null;
+  async function lock() {
+    try {
+      if (cfg.keepAwake && 'wakeLock' in navigator && document.visibilityState === 'visible' && !wl) {
+        wl = await navigator.wakeLock.request('screen');
+        wl.addEventListener('release', () => { wl = null; });
+      } else if (!cfg.keepAwake && wl) { await wl.release(); wl = null; }
+    } catch (e) { wl = null; }
+  }
+  document.addEventListener('visibilitychange', lock);
+
+  /* ---------- תחנת האזנה ---------- */
+  const L = { ctx: null, stream: null, proc: null, src: null, sink: null, on: false, muted: false,
+              db: -90, floor: -60, warm: 0, pre: [], seg: null, voiced: 0, quiet: 0, hot: 0,
+              sent: 0, ok: 0, fail: 0, sending: 0, sr: 48000 };
+  const MIN_S = 0.6, MAX_S = 12, HANG_S = 0.7, PRE_S = 0.3;
+  const dbOf = (buf) => { let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i]; return 20 * Math.log10(Math.sqrt(s / buf.length) + 1e-9); };
+  const thrDb = () => Math.max(L.floor + 10, -50);
+
+  function setListenStatus(txt, s) { const el = $('#listenStatus'); el.textContent = txt; el.dataset.s = s; }
+  function updStats() { $('#stSeg').textContent = L.sent; $('#stOk').textContent = L.ok; $('#stFail').textContent = L.fail; }
+
+  function onAudio(chunk) {
+    if (L.muted) return;
+    const frameS = chunk.length / L.sr;
+    const db = dbOf(chunk);
+    L.db = db;
+    const thr = thrDb();
+    if (!L.seg) {
+      if (L.warm < 12) { L.floor = L.warm === 0 ? db : L.floor * 0.8 + db * 0.2; L.warm++; }
+      else if (db < thr) L.floor = L.floor * 0.97 + db * 0.03;
+      L.pre.push(chunk);
+      while (L.pre.length * frameS > PRE_S + frameS) L.pre.shift();
+      L.hot = db > thr ? L.hot + 1 : 0;
+      if (L.hot >= 2 && L.warm >= 12) {
+        L.seg = L.pre.slice(); L.pre = []; L.voiced = frameS * L.hot; L.quiet = 0;
+        setListenStatus('שומע שידור…', 'rec');
+      }
+      return;
+    }
+    L.seg.push(chunk);
+    if (db > thr - 3) { L.voiced += frameS; L.quiet = 0; } else { L.quiet += frameS; }
+    const len = L.seg.length * frameS;
+    if (L.quiet >= HANG_S || len >= MAX_S) {
+      const seg = L.seg, voiced = L.voiced;
+      L.seg = null; L.voiced = 0; L.quiet = 0; L.hot = 0;
+      setListenStatus(L.muted ? 'מושתק' : 'מאזין', L.muted ? 'mute' : 'idle');
+      if (voiced >= MIN_S) finishSegment(seg);
+    }
+  }
+  function toWav16k(chunks, sr) {
+    let n = 0; chunks.forEach((c) => { n += c.length; });
+    const all = new Float32Array(n); let o = 0; chunks.forEach((c) => { all.set(c, o); o += c.length; });
+    const ratio = sr / 16000, outN = Math.floor(n / ratio);
+    const pcm = new Int16Array(outN);
+    for (let i = 0; i < outN; i++) {
+      const a = Math.floor(i * ratio), b = Math.max(a + 1, Math.min(n, Math.floor((i + 1) * ratio)));
+      let s = 0; for (let k = a; k < b; k++) s += all[k];
+      const v = Math.max(-1, Math.min(1, s / (b - a)));
+      pcm[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
+    }
+    const buf = new ArrayBuffer(44 + pcm.length * 2), dv = new DataView(buf);
+    const w = (off, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(off + i, s.charCodeAt(i)); };
+    w(0, 'RIFF'); dv.setUint32(4, 36 + pcm.length * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+    dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+    dv.setUint32(24, 16000, true); dv.setUint32(28, 32000, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+    w(36, 'data'); dv.setUint32(40, pcm.length * 2, true);
+    new Int16Array(buf, 44).set(pcm);
+    return { blob: new Blob([buf], { type: 'audio/wav' }), seconds: pcm.length / 16000 };
+  }
+  async function finishSegment(chunks) {
+    const { blob, seconds } = toWav16k(chunks, L.sr);
+    L.sent++;
+    dbg.segments.push({ seconds: +seconds.toFixed(2), bytes: blob.size });
+    updStats();
+    if (!isRemote()) { $('#listenNote').textContent = 'מצב הדגמה: המקטע (' + seconds.toFixed(1) + ' שנ׳) לא נשלח, כי אין bridge.'; return; }
+    if (L.sending >= 3) { L.fail++; updStats(); return; }
+    L.sending++;
+    try {
+      const res = await fetch(baseUrl() + '/radio/segment', {
+        method: 'POST',
+        headers: headers({ 'Content-Type': 'audio/wav', 'X-Station-Id': L.sid(), 'X-Station-Name': encodeURIComponent(cfg.station || '') }),
+        body: blob
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      L.ok++;
+      $('#listenNote').textContent = 'נשלח מקטע של ' + seconds.toFixed(1) + ' שנ׳.';
+      if (!sseOk) setTimeout(pollOnce, 700);
+    } catch (e) {
+      L.fail++;
+      $('#listenNote').textContent = 'שליחה נכשלה. בדקו חיבור והגדרות.';
+    } finally { L.sending--; updStats(); }
+  }
+  L.sid = () => cfg.stationId;
+
+  async function startListen() {
+    unlockAudio();
+    try {
+      L.stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: true } });
+    } catch (e) {
+      $('#listenNote').textContent = 'אין גישה למיקרופון. צריך HTTPS ואישור הרשאה.';
+      return;
+    }
+    L.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (L.ctx.state === 'suspended') await L.ctx.resume();
+    L.sr = L.ctx.sampleRate;
+    L.src = L.ctx.createMediaStreamSource(L.stream);
+    L.proc = L.ctx.createScriptProcessor(2048, 1, 1);
+    L.sink = L.ctx.createGain(); L.sink.gain.value = 0;
+    L.proc.onaudioprocess = (e) => onAudio(new Float32Array(e.inputBuffer.getChannelData(0)));
+    L.src.connect(L.proc); L.proc.connect(L.sink); L.sink.connect(L.ctx.destination);
+    L.on = true; L.muted = false; L.warm = 0; L.pre = []; L.seg = null;
+    $('#listenBtn').textContent = 'עצור האזנה';
+    $('#muteBtn').disabled = false; $('#muteBtn').textContent = 'השתק';
+    $('#listenNote').textContent = isRemote() ? '' : 'מצב הדגמה: המקטעים לא נשלחים.';
+    setListenStatus('מאזין', 'idle');
+    requestAnimationFrame(drawMeter);
+    lock();
+  }
+  function stopListen() {
+    L.on = false;
+    try { L.proc && (L.proc.onaudioprocess = null); L.src && L.src.disconnect(); L.proc && L.proc.disconnect(); } catch (e) { /* ignore */ }
+    if (L.stream) L.stream.getTracks().forEach((t) => t.stop());
+    if (L.ctx) L.ctx.close().catch(() => {});
+    L.ctx = L.stream = L.proc = L.src = null; L.seg = null;
+    $('#listenBtn').textContent = 'התחל האזנה';
+    $('#muteBtn').disabled = true;
+    setListenStatus('לא מאזין', 'idle');
+    $('#lvl').style.width = '0';
+  }
+  function drawMeter() {
+    if (!L.on) return;
+    const pct = (db) => Math.max(0, Math.min(100, ((db + 70) / 60) * 100));
+    $('#lvl').style.width = (L.muted ? 0 : pct(L.db)) + '%';
+    $('#meter').classList.toggle('hot', !!L.seg);
+    $('#thr').style.insetInlineStart = pct(thrDb()) + '%';
+    requestAnimationFrame(drawMeter);
+  }
+  $('#listenBtn').addEventListener('click', () => (L.on ? stopListen() : startListen()));
+  $('#muteBtn').addEventListener('click', () => {
+    L.muted = !L.muted; L.seg = null; L.pre = [];
+    $('#muteBtn').textContent = L.muted ? 'בטל השתקה' : 'השתק';
+    setListenStatus(L.muted ? 'מושתק' : 'מאזין', L.muted ? 'mute' : 'idle');
+  });
+
+  /* ---------- הפעלה ---------- */
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+  syncCards();
+  connect();
+  lock();
+  tick();
+})();
+</script>
+</body>
+</html>
