@@ -138,6 +138,7 @@ def voice():
         if not text:
             return jsonify(text="", reply="Didn't catch that", action="face:confused")
         # פקודות Hub ("איפה הכיס שלי", "תקריא את הסיכום") מטופלות לפני ה-LLM
+        book_status = None
         intent = handle_voice_intent(text, request.headers.get("X-Device-Id"))
         if intent:
             reply, action = intent["reply"], intent["action"]
@@ -145,9 +146,12 @@ def voice():
             rec = recipes.handle_voice(text, request.headers.get("X-Mode"), request.headers.get("X-Device-Id"))
             if rec:
                 reply, action = rec["reply"], rec["action"]
+                book_status = rec.get("status")   # pending/blocked/...: the device shows its own short message
             else:
                 reply, action = llm(text) or builtin(text), "face:happy"
         audio_url = None
+        if book_status:
+            return jsonify(text=text, reply=reply, action=action, audio_url=None, status=book_status)   # no TTS for "not ready" messages
         try:
             wav = tts_wav(reply)
             if wav:

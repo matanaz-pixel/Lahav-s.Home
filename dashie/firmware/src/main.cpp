@@ -56,12 +56,12 @@ static const uint8_t BRIGHT_LV[3] = {64, 160, 255};
 static const uint8_t VOL_LV[5] = {0, 64, 128, 200, 255};
 static const float SENS_DB[3] = {15.0f, 12.0f, 9.0f};
 
-struct Settings { uint8_t bright = 1, vol = 2, sens = 1, theme = 0; bool voice = true; } cfg;
+struct Settings { uint8_t bright = 1, vol = 2, sens = 1, theme = 0; bool voice = true; bool recipe = false; } cfg;
 struct Trip { uint32_t secs = 0, brakes = 0, turns = 0, noiseN = 0; float maxG = 0, noiseSum = 0; } trip;
 #ifdef USE_A2DP_OUT
-static constexpr int SET_ITEMS = 7;    // + "Test kit"
+static constexpr int SET_ITEMS = 8;    // + "Button asks" + "Test kit"
 #else
-static constexpr int SET_ITEMS = 6;
+static constexpr int SET_ITEMS = 7;    // + "Button asks" (assistant / recipe book)
 #endif
 
 static M5Canvas cv(&M5.Display);
@@ -117,6 +117,9 @@ static Mood replyMood = Mood::HAPPY;
 static std::vector<String> replyLines;
 static bool replyHeFont = false; static bool replyRight = false;
 static uint32_t replySince = 0;
+static bool askRecipes = false;                  // the current question goes to the recipe book (X-Mode: recipes)
+static bool pttHeld = false;                     // recipe PTT: recording while the button is held down
+static uint32_t pttUpSince = 0, pttVibOff = 0;
 static uint32_t thinkTimeoutMs = 20000;          // THINK gives up after this long (shift summary: longer)
 static uint32_t replyHoldMs = 8000;              // how long REPLY stays after the audio ended (long summaries: more)
 static String shiftReplyText;                    // set by shift mode: text to show instead of job.reply
@@ -154,6 +157,8 @@ struct NetJob {
   StrId err = S_ERR_BRIDGE;
   char text[160] = {0}, reply[240] = {0}, action[24] = {0}, audioUrl[200] = {0};
   uint8_t* audio = nullptr; size_t audioLen = 0;
+  bool recipes = false;            // ask the recipe book (X-Mode: recipes)
+  char bookStatus[16] = {0};       // bridge's recipe-book state: pending / blocked / unknown / unconfigured / error
 };
 static NetJob job;
 
@@ -262,6 +267,7 @@ static StrId doRequest() {
     http.addHeader("Content-Type", "audio/wav");
     bridge::addAuth(http);                              // Bearer token (BRIDGE_TOKEN), if configured
     if (hub::deviceId()[0]) http.addHeader("X-Device-Id", hub::deviceId());   // lets the bridge route hub voice commands
+    if (job.recipes) http.addHeader("X-Mode", "recipes");                      // force the recipe book (otherwise the bridge guesses from the words)
     int code = http.POST(job.wav, job.wavLen);
     if (code == 200) {
       char* resp = (char*)bigAlloc(RESP_MAX_BYTES);
@@ -282,7 +288,14 @@ static StrId doRequest() {
           strlcpy(job.reply, doc["reply"] | "", sizeof(job.reply));
           strlcpy(job.action, doc["action"] | "", sizeof(job.action));
           strlcpy(job.audioUrl, doc["audio_url"] | "", sizeof(job.audioUrl));
+          strlcpy(job.bookStatus, doc["status"] | "", sizeof(job.bookStatus));
           result = S_COUNT;                     // success marker
+          if (job.bookStatus[0]) {              // recipe book not ready: show a short local message instead of the bridge's text
+            if (!strcmp(job.bookStatus, "pending")) result = S_RCP_WAIT;
+            else if (!strcmp(job.bookStatus, "blocked")) result = S_RCP_BLOCKED;
+            else if (!strcmp(job.bookStatus, "unknown") || !strcmp(job.bookStatus, "unconfigured")) result = S_RCP_SETUP;
+            else if (!strcmp(job.bookStatus, "error")) result = S_RCP_DOWN;
+          }
         }
         heap_caps_free(resp);
       }
@@ -447,7 +460,7 @@ static void wrapText(const String& text, bool he, int maxW, int sz) {
 // ----------------------------------------------------------------------------
 static void saveSettings() {
   prefs.putUChar("br", cfg.bright); prefs.putUChar("vol", cfg.vol); prefs.putUChar("sens", cfg.sens);
-  prefs.putUChar("theme", cfg.theme); prefs.putBool("vt", cfg.voice); prefs.putUChar("lang", g_lang);
+  prefs.putUChar("theme", cfg.theme); prefs.putBool("vt", cfg.voice); prefs.putUChar("lang", g_lang); prefs.putBool("rcp", cfg.recipe);
 }
 static void saveTrip() {
   prefs.putUInt("ts", trip.secs); prefs.putUInt("brk", trip.brakes); prefs.putUInt("trn", trip.turns);
@@ -461,6 +474,7 @@ static void loadPrefs() {
   cfg.sens = min<uint8_t>(prefs.getUChar("sens", 1), 2);
   cfg.theme = min<uint8_t>(prefs.getUChar("theme", 0), 2);
   cfg.voice = prefs.getBool("vt", true);
+  cfg.recipe = prefs.getBool("rcp", false);
   g_lang = min<uint8_t>(prefs.getUChar("lang", LANG_EN), 1);
   trip.secs = prefs.getUInt("ts", 0); trip.brakes = prefs.getUInt("brk", 0); trip.turns = prefs.getUInt("trn", 0);
   trip.maxG = prefs.getFloat("mg", 0); trip.noiseSum = prefs.getFloat("ns", 0); trip.noiseN = prefs.getUInt("nn", 0);
@@ -507,6 +521,7 @@ static void toInfo(StrId e, uint32_t now) {      // same screen as an error, but
 
 static void startListen(uint32_t now) {
   lastActivity = now;
+  askRecipes = cfg.recipe;
   beep(1400, 50);
   now = millis();
   shout.holdoff(now, 3000);
@@ -531,12 +546,24 @@ static void startRecord(uint32_t now) {
   setSt(St::RECORD, now);
 }
 
+// Recipe PTT: hold the front button (Core2: BtnA touch zone, Plus2: BtnA) while asking, release to send.
+// No beep (the speaker would take the mic away): a short vibration on Core2, the screen changes on Plus2.
+static void startPtt(uint32_t now) {
+  lastActivity = now;
+  askRecipes = true; pttHeld = true; pttUpSince = 0;
+  shout.holdoff(now, 3000);
+  if (M5.getBoard() == m5::board_t::board_M5StackCore2) { M5.Power.setVibration(180); pttVibOff = now + 70; }
+  startRecord(now);
+  if (st != St::RECORD) pttHeld = false;         // allocation failed: startRecord already showed the error
+}
+
 static void startNet(uint32_t now) {
   if (job.status != 0) { toError(S_ERR_BUSY, now); return; }
   writeWavHeader(recBuf, recN);
   job.wav = recBuf; job.wavLen = 44 + recN * 2; recBuf = nullptr; recN = 0;
   job.orphan = false; job.audio = nullptr; job.audioLen = 0;
-  job.text[0] = job.reply[0] = job.action[0] = job.audioUrl[0] = 0;
+  job.text[0] = job.reply[0] = job.action[0] = job.audioUrl[0] = job.bookStatus[0] = 0;
+  job.recipes = askRecipes;
   thinkTimeoutMs = 20000;
   job.status = 1;
   xTaskCreatePinnedToCore(netTask, "net", 20480, nullptr, 1, nullptr, 0);
@@ -574,7 +601,7 @@ static void startPlayback(uint8_t* buf, size_t len, bool allowBt = true) {
 
 static void startReply(uint32_t now) {
   String r = shiftReplyText.length() ? shiftReplyText : (job.reply[0] ? String(job.reply) : String(job.text));
-  const bool longText = shiftReplyText.length() > 0; shiftReplyText = "";
+  const bool longText = shiftReplyText.length() > 0 || job.recipes; shiftReplyText = "";   // long answers scroll: keep them up longer
   replyMood = Mood::HAPPY;
   if (strcmp(job.action, "face:angry") == 0) replyMood = Mood::ANGRY;
   else if (strcmp(job.action, "face:confused") == 0) replyMood = Mood::CONFUSED;
@@ -974,8 +1001,9 @@ static void changeSetting(uint32_t now) {
     case 3: cfg.theme = (cfg.theme + 1) % 3; break;
     case 4: cfg.voice = !cfg.voice; break;
     case 5: g_lang = (g_lang == LANG_EN) ? LANG_HE : LANG_EN; break;
+    case 6: cfg.recipe = !cfg.recipe; break;
 #ifdef USE_A2DP_OUT
-    case 6: if (a2o::test()) { testRunning = true; testRes = a2o::Res::NONE; } break;
+    case 7: if (a2o::test()) { testRunning = true; testRes = a2o::Res::NONE; } break;
 #endif
   }
   saveSettings();
@@ -1050,6 +1078,28 @@ static void onAction(char which, uint32_t now) {
 // Button-only boards (Plus2): A click = 'A'; B click = 'B' (in Settings: 'C' = change value);
 // B hold = 'C' (reset); PWR click = 'S'; A hold in Settings = 'S' (back).
 static void handleInput(uint32_t now) {
+  // ---- recipe PTT (Settings: "Button asks: recipe book"): hold BtnA to talk, release to send. Not during a shift.
+  if (pttHeld) {
+    if (st != St::RECORD) { pttHeld = false; }                    // cancelled by something else (crash, hub alert)
+    else {
+      if (M5.BtnA.isPressed()) pttUpSince = 0;
+      else if (!pttUpSince) pttUpSince = now;
+      if (pttUpSince && now - pttUpSince >= 120) {               // released (debounced: touch zones flicker)
+        pttHeld = false;
+        if (recMs >= 400) startNet(now); else toIdle(now);       // a tap is not a question
+      }
+      return;                                                     // swallow every other input while talking
+    }
+  }
+  #if SHIFT_ENABLED
+  const bool onShiftScr = (screen == SC_SHIFT);
+#else
+  const bool onShiftScr = false;
+#endif
+  if (cfg.recipe && st == St::IDLE && screen != SC_SET && !onShiftScr && !shift::active() && M5.BtnA.wasPressed()) {
+    startPtt(now);
+    return;
+  }
 #ifdef DASHIE_BUTTONS_ONLY
   const bool inSet = (screen == SC_SET) && st == St::IDLE;
 #if SHIFT_ENABLED
@@ -1123,7 +1173,9 @@ static void processFrame(const int16_t* f, uint32_t now) {
     recN += n; recMs += FRAME_MS;
     if (dbNow > shout.floorDb() + 8.0f) { speechSeen = true; recQuietMs = 0; }
     else recQuietMs += FRAME_MS;
-    if (recN >= MAX_SAMP || (speechSeen && recQuietMs >= END_SILENCE_MS && recMs >= 500)) {
+    if (pttHeld) {                                    // recipe PTT: the button decides, not the silence detector
+      if (recN >= MAX_SAMP) { pttHeld = false; startNet(now); }
+    } else if (recN >= MAX_SAMP || (speechSeen && recQuietMs >= END_SILENCE_MS && recMs >= 500)) {
       startNet(now);
     } else if (!speechSeen && recMs >= 2500) {
       toError(S_ERR_NOCATCH, now);
@@ -1413,7 +1465,7 @@ static void renderScreen(uint32_t now) {
         break;
       }
 #endif
-      static const StrId labels[SET_ITEMS] = {S_BRIGHT, S_VOLUME, S_SENS, S_THEME, S_VOICE, S_LANG
+      static const StrId labels[SET_ITEMS] = {S_BRIGHT, S_VOLUME, S_SENS, S_THEME, S_VOICE, S_LANG, S_PTT
 #ifdef USE_A2DP_OUT
         , S_TESTKIT
 #endif
@@ -1441,8 +1493,9 @@ static void renderScreen(uint32_t now) {
             v = g_lang == LANG_HE ? kStrings[S_LANG_HE_NOFONT].en : kStrings[S_LANG_EN].en;
 #endif
             break;
+          case 6: v = ui(cfg.recipe ? S_PTT_RECIPES : S_PTT_ASSIST); break;
 #ifdef USE_A2DP_OUT
-          case 6: {
+          case 7: {
             StrId id =
 #ifdef DASHIE_BUTTONS_ONLY
                 S_BT_IDLE_BTN;
@@ -1488,7 +1541,7 @@ static void renderOverlay(uint32_t now) {
         cv.fillRect(L.waveX + i * L.waveStep, L.waveBase - h / 2, L.waveW, h, speechSeen ? k.acc : k.fg);
       }
       snprintf(b, sizeof(b), "%.1fs", recMs / 1000.0f);
-      say(ui(S_RECORDING), L.margin, L.statusY, AL_L, 2, k.fg);
+      say(ui(pttHeld ? S_RCP_HOLD : S_RECORDING), L.margin, L.statusY, AL_L, 2, k.fg);
       say(b, L.right(), L.statusY, AL_R, 2, k.acc, true);
       break;
     }
@@ -1578,7 +1631,21 @@ static void renderOverlay(uint32_t now) {
 #endif
     case St::ERROR:
       drawFace(cv, L.cx(), L.errCy, L.errS, errInfo ? Mood::NEUTRAL : Mood::CONFUSED, now, k);
-      say(ui(errId), L.cx(), L.errY, AL_C, 2, errInfo ? k.acc : rgb(255, 160, 80));
+      {
+        String m = ui(errId); const uint16_t ec = errInfo ? k.acc : rgb(255, 160, 80);
+        setupFont(heActive(), 2);
+        if (cv.textWidth(m.c_str()) > L.W - 12 && !heActive()) {     // too wide for one line: split at the space nearest the middle
+          int best = -1;
+          for (int i = 1; i < (int)m.length() - 1; i++) if (m[i] == ' ' && (best < 0 || abs(i - (int)m.length() / 2) < abs(best - (int)m.length() / 2))) best = i;
+          if (best > 0) {
+            int lh = cv.fontHeight() + 2;
+            say(m.substring(0, best), L.cx(), L.errY - lh / 2, AL_C, 2, ec);
+            say(m.substring(best + 1), L.cx(), L.errY + lh / 2, AL_C, 2, ec);
+            break;
+          }
+        }
+        say(m, L.cx(), L.errY, AL_C, 2, ec);
+      }
       break;
     default: break;
   }
@@ -1660,6 +1727,7 @@ void loop() {
     if (testRes == a2o::Res::NOT_FOUND && screen == SC_SET) { btPicking = true; pickSel = 0; }   // show what the scan saw
   }
 #endif
+  if (pttVibOff && now >= pttVibOff) { M5.Power.setVibration(0); pttVibOff = 0; }
   handleInput(now);
 #if SHIFT_ENABLED
   shiftLoop(now);
@@ -1686,7 +1754,10 @@ void loop() {
     case St::LISTEN: if (now - stSince >= 450) startRecord(now); break;
     case St::THINK:
       if (job.status == 2) startReply(now);
-      else if (job.status == 3) { StrId e = job.err; job.status = 0; toError(e, now); }
+      else if (job.status == 3) {
+        StrId e = job.err; job.status = 0;
+        if (e >= S_RCP_WAIT && e <= S_RCP_DOWN) toInfo(e, now); else toError(e, now);   // recipe book not ready: calm screen
+      }
       else if (now - stSince > thinkTimeoutMs) { job.orphan = true; toError(S_ERR_BRIDGE, now); }
       break;
     case St::REPLY: {

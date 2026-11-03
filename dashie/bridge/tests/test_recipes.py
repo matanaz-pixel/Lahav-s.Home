@@ -548,6 +548,13 @@ def test_voice_not_ready_message(voice_env, ready):
     VOICE["text"] = "מה המתכון של הלזניה"
     j = post_voice(voice_env)
     assert "נחסמה" in j["reply"] and j["action"] == "face:confused"
+    assert j["status"] == "blocked" and j["audio_url"] is None   # the device maps the status to its own short message
+
+
+def test_voice_ready_answer_has_no_status(voice_env):
+    VOICE["text"] = "מה המתכון של הלזניה"
+    j = post_voice(voice_env, {"X-Mode": "recipes"})
+    assert "status" not in j
 
 
 def test_voice_never_raises_on_book_failure(voice_env, monkeypatch):

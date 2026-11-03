@@ -5,7 +5,7 @@ pio run -e core2            # or: cores3, plus2, core2_a2dp, plus2_a2dp
 pio run -e core2 -t upload
 pio device monitor
 ```
-Edit `src/config.h` first (Wi-Fi networks, `BRIDGE_URL`, timezone). **Read the IRAM warning in the Hub section before building the A2DP envs with Wi-Fi configured.**
+Edit `src/config.h` first (Wi-Fi networks, `BRIDGE_URL`, timezone). The A2DP envs use `tools/trim_iram.py` (see "IRAM limit" in the Hub section); it is wired in `platformio.ini`, nothing to do.
 
 ## Boards / environments
 | env | board | notes |
@@ -47,7 +47,8 @@ Plus2: holding PWR for a few seconds still powers the stick off (hardware behavi
 | `src/bridge_net.h` | shared bridge helpers (base URL, token, https client, ISO time); used by shift and hub |
 | `src/hub.h`, `src/hub.cpp` | hub worker task: heartbeat/poll, commands, acks, crash alert (car <-> pocket) |
 | `src/wifi_mgr.h` | Wi-Fi manager: up to 4 networks, joins the strongest, backoff reconnect |
-| `partitions_plus2.csv` | Plus2 partition table (2 MB app + ~6 MB LittleFS) |
+| `partitions_plus2.csv` | Plus2 partition table (3 MB app + ~5 MB LittleFS) |
+| `tools/trim_iram.py` | pre-script of the `*_a2dp` envs: moves libc out of IRAM so Wi-Fi + A2DP link (see Hub section) |
 | `src/trigger.h` | "double shout" voice trigger + Edge Impulse hook (`USE_EI_KWS`) |
 | `src/face.h` | animated face (moods: neutral/happy/worried/angry/confused/listen/think/talk) |
 | `src/strings.h` | ALL UI strings, EN + HE table; language switch in Settings (saved in Preferences) |
@@ -86,6 +87,22 @@ Replies from the bridge that contain Hebrew are drawn with the Hebrew font and r
 - `audio_url` (absolute, or `/path` relative to the bridge) -> mono 16-bit WAV, up to 600 KB, downloaded into PSRAM
   and played while the face "talks". If the download fails the reply is shown as text only.
 - `action`: `beep`, `face:happy|angry|confused|worried`. Anything else is ignored.
+
+## Recipe mode (ask the restaurant recipe book with a button)
+Settings -> **Button asks: recipe book** (default: assistant). In recipe mode:
+- **Hold the front button (BtnA on Core2 and Plus2), talk, release to send.** Real push-to-talk: the silence detector is not used,
+  max 12 s per question (`MAX_SAMP`), a tap shorter than 0.4 s is ignored. Core2 vibrates for 70 ms when recording starts
+  (no beep: the speaker would take the mic away). Not during a shift (there BtnPWR / A is the note button) and not on the Settings/Shift screens.
+- Tapping the face (touch) or the voice trigger also ask the book (the request carries `X-Mode: recipes`).
+- The answer is shown as large text that scrolls, and spoken (`audio_url`) through the kit (A2DP env) or the Core2 speaker. Plus2 without
+  A2DP shows text only.
+- The device shows its own short message when the bridge says the book is not ready (the bridge adds `"status"` to the `/voice` JSON):
+  `pending` -> *Waiting for approval in the sheet*, `blocked` -> *Book access blocked in the sheet*, `unknown`/`unconfigured` ->
+  *Book not connected: run setup on the bridge*, `error` -> *Recipe book unavailable now*. Allergens come from the sheet column on the bridge side.
+- Strings (EN/HE) are in `strings.h` (`S_PTT*`, `S_RCP_*`). Hebrew still needs `font_he.h`.
+- Not verified on hardware: BtnA as a level button on the Core2 touch zone (hold detection and release debounce of 120 ms),
+  Plus2 front button, the 70 ms vibration, and the pending/blocked screens. The Core2 side button (BtnPWR) is not used for PTT on purpose:
+  M5Unified reads it from AXP192 key events, which may not report a held level.
 
 ## Known limitations
 - Mic is uncalibrated: tune `DB_OFFSET` against a phone dB meter.
@@ -133,8 +150,8 @@ works with your car: a short two-tone beep should come out of the car speakers w
 - **Hardware:** ESP32-PICO-V3-02, 8 MB flash, **2 MB PSRAM**, 135x240 ST7789, PDM mic, MPU6886, buzzer, buttons A/B/PWR.
   PlatformIO has no board file for it; `board = m5stick-c` is used with the flash size forced to 8 MB (`partitions_plus2.csv`),
   and M5Unified/M5GFX detect the Plus2 at run time. `-DBOARD_HAS_PSRAM` comes from the shared flags.
-  The partition table is `partitions_plus2.csv` (2 MB app + ~6 MB LittleFS for shift-mode notes instead of `default_8MB.csv`);
-  changing the partition table needs a normal USB flash (`pio run -e plus2 -t upload`), not OTA. `plus2_a2dp` uses 81 % of the 2 MB app slot.
+  The partition table is `partitions_plus2.csv` (3 MB app + ~5 MB LittleFS for shift-mode notes instead of `default_8MB.csv`; the app slot was 2 MB until Wi-Fi + A2DP + shift + hub + recipe mode needed more);
+  changing the partition table needs a normal USB flash (`pio run -e plus2 -t upload`), not OTA. `plus2_a2dp` with Wi-Fi uses ~63 % of the 3 MB app slot. The ~5 MB LittleFS holds ~5 min of 16 KB/s notes (the Shift screen shows what is left).
 - **Memory:** internal RAM is the same ~320 KB as on the Core2, so Wi-Fi + A2DP is exactly as tight as there
   (`A2DP_MIN_FREE_HEAP` check + fallback are shared). What differs is PSRAM: 2 MB instead of 8 MB. A voice request
   peaks at about 0.25 MB (recording 192 KB + sprite 65 KB + JSON) plus the downloaded reply WAV (<= `AUDIO_MAX_BYTES`,
@@ -242,20 +259,27 @@ polls fast only while it is on that SSID (otherwise every `HUB_POLL_SLOW_S`, 60 
 `/voice` now also sends `X-Device-Id` and the Bearer token (needed for the spoken hub commands "where is my pocket device" / "read my summary").
 Audio downloads send the Bearer token only to the bridge's own origin.
 
-### IRAM limit: A2DP envs and Wi-Fi (pre-existing, found while building the hub)
-**`core2_a2dp` and `plus2_a2dp` do not link once a Wi-Fi network is configured** (`WIFI_SSID` non-empty):
-`region 'iram0_0_seg' overflowed by 2004 bytes` (Core2; 1876 on Plus2). It is **not** caused by the hub: the commit before the hub
-(shift mode) fails the same way with `-DWIFI_SSID=\"x\"`. With the shipped default (empty SSID) the compiler removes all Wi-Fi
-driver calls, the link fits, and the build looked fine. The Bluetooth controller (~31 KB), the Wi-Fi driver and the system
-libraries already fill the 128 KB IRAM of the prebuilt Arduino core; the Wi-Fi driver objects that `WiFi.begin()` pulls in are the last ~2 KB.
-Nothing in this firmware lives in IRAM (checked in the link map), so it can not be fixed from the sketch.
-`wifi_mgr.h` keeps the default config linkable (`kAny` folds to nothing when no SSID is set) and avoids the scan API in A2DP envs,
-but the real fix is a core with a smaller IRAM footprint: build the Arduino core with its own `sdkconfig`
-(PlatformIO `framework = arduino, espidf` + `custom_sdkconfig`, or `esp32-arduino-lib-builder`) - not tried, long build.
-Until then, for a Wi-Fi-connected car device use **`core2`** (own speaker, no A2DP) or accept that the A2DP envs only run with Wi-Fi off.
+### IRAM limit: A2DP envs and Wi-Fi (fixed with `tools/trim_iram.py`)
+Before the fix, **`core2_a2dp` and `plus2_a2dp` did not link once a Wi-Fi network was configured** (`WIFI_SSID` non-empty):
+`region 'iram0_0_seg' overflowed by 2004 bytes` (Core2; 1876 on Plus2). It was already there before the hub (shift-mode commit
+`ee1f241` fails the same way); with the shipped empty SSID the compiler removes all Wi-Fi driver calls, so those builds looked fine.
+
+Cause (found in the generated linker script): the prebuilt Arduino-ESP32 2.0.x core is compiled with
+`CONFIG_SPIRAM_CACHE_WORKAROUND=y` (needed for ESP32 silicon rev 0/1), so its `sections.ld` places ~110 libc functions (stdio, time,
+strftime, string functions, ...) in IRAM. Bluetooth Classic + Wi-Fi + the A2DP library then overflow the 128 KB IRAM by ~2 KB.
+
+Fix: `tools/trim_iram.py` (pre-script, only in the `*_a2dp` envs) writes a copy of `sections.ld` into the build dir without that libc
+block; the build dir is first on the linker search path, so the libc functions live in flash like in any normal ESP-IDF build.
+Result: IRAM text 115.6 KB of 128 KB (~14 KB free), `core2_a2dp` and `plus2_a2dp` link **with and without** `-DWIFI_SSID=...`.
+The Wi-Fi/BT symbols are really in the ELF (checked with `nm`).
+
+**Only valid for ESP32 rev 3 silicon** (Core2 v1.1 = ESP32-D0WDQ6-V3, Plus2 = ESP32-PICO-V3-02). On an old rev 0/1 chip with PSRAM
+(original M5Stack Core/Fire) the libc-in-IRAM rule is there for a reason: do not use this script there.
+Not tested on hardware: a boot / long A2DP + Wi-Fi run on a real Core2/Plus2 is the thing to check first (watch the serial log for
+crashes such as `Cache disabled but cached memory region accessed`).
 
 ### Memory / battery notes
-- `plus2_a2dp` app slot: 82.2 % (was 81.5 % before the hub). `core2` flash 15 %.
+- `plus2_a2dp` with Wi-Fi: 1.97 MB = 63 % of the 3 MB app slot. `core2` flash 15-20 %, `core2_a2dp` 31 %.
 - A Plus2 with Wi-Fi on for a whole shift will not last 8 h on its 200 mAh battery even with modem sleep and slow polling.
   Expect a few hours; charge it, or accept uploading only when you are near Wi-Fi. Not measured.
 

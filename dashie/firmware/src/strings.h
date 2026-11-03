@@ -28,6 +28,8 @@ enum StrId : uint8_t {
   S_SHIFT, S_START, S_READ, S_NOTE, S_END, S_SH_NONE, S_SH_HOLDA, S_SH_HINT_CORE, S_SH_HINT_STICK, S_SH_NOTES, S_SH_QUEUE, S_SH_BATT, S_SH_STORE, S_SH_LAST, S_SH_READY, S_SH_NOLAST, S_SH_OFFLINE, S_SH_LOWSTORE, S_SH_WRITEERR, S_SH_LOWBATT, S_SH_SUMREADY, S_REC_NOTE, S_ENDQ, S_ENDQ_CORE, S_ENDQ_STICK, S_Q1, S_Q2, S_Q3, S_Q4, S_Q_HINT_CORE, S_Q_HINT_STICK, S_SENDING, S_SUMMARIZING, S_SAVED_OFFLINE, S_ERR_NOSTORE, S_NO_SUMMARY,
   // hub (car <-> pocket)
   S_PEER, S_PEER_NONE, S_LINK, S_ONLINE, S_NEVER, S_INCAR, S_YES, S_NO, S_ACTIVE, S_IDLE_W, S_DASH, S_CAR_ALERT, S_FINDME,
+  // recipe book (PTT = ask recipes). S_RCP_WAIT..S_RCP_DOWN must stay contiguous: they are shown as calm info screens
+  S_PTT, S_PTT_ASSIST, S_PTT_RECIPES, S_RCP_HOLD, S_RCP_WAIT, S_RCP_BLOCKED, S_RCP_SETUP, S_RCP_DOWN,
   S_COUNT
 };
 
@@ -148,6 +150,14 @@ static const StrRow kStrings[S_COUNT] = {
   /* S_DASH */ {"-", "-"},
   /* S_CAR_ALERT */ {"CRASH ALERT FROM CAR", "התראת פגיעה מהרכב"},
   /* S_FINDME */ {"Here I am!", "אני כאן!"},
+  /* S_PTT */ {"Button asks", "הכפתור שואל"},
+  /* S_PTT_ASSIST */ {"assistant", "עוזר"},
+  /* S_PTT_RECIPES */ {"recipe book", "ספר מתכונים"},
+  /* S_RCP_HOLD */ {"Release to send", "שחרר לשליחה"},
+  /* S_RCP_WAIT */ {"Waiting for approval in the sheet", "ממתין לאישור בגיליון"},
+  /* S_RCP_BLOCKED */ {"Book access blocked in the sheet", "הגישה לספר נחסמה בגיליון"},
+  /* S_RCP_SETUP */ {"Book not connected: run setup on the bridge", "הספר לא מחובר: להריץ הגדרה בשרת"},
+  /* S_RCP_DOWN */ {"Recipe book unavailable now", "הספר לא זמין כרגע"},
 };
 
 enum Lang : uint8_t { LANG_EN = 0, LANG_HE = 1 };
