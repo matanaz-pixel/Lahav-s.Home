@@ -376,8 +376,10 @@ def test_seg_ts_compensates_latency(client, stt, rad):
 def test_seg_ts_implausible_is_ignored(client, stt, rad):
     say(client, stt, "דקה ללזניה של 2", headers={"X-Seg-Ts": str(rad.t - 99999)})
     assert state(client)["timers"][0]["started_at"] == rad.t
+    rad.t += 100  # הכפילות מחוץ לחלון, וכותרת שאינה מספר מתעלמים ממנה
     say(client, stt, "דקה לפסטה של 3", headers={"X-Seg-Ts": "not-a-number"})
-    assert state(client)["timers"][1]["started_at"] == rad.t if len(state(client)["timers"]) > 1 else True
+    started = {t["table"]: t["started_at"] for t in state(client)["timers"]}
+    assert started[3] == rad.t
 
 
 def test_seg_ts_milliseconds(client, stt, rad):
@@ -630,7 +632,6 @@ def test_llm_fallback_applies_valid_commands(client, stt, rad, monkeypatch):
         lambda s, u: 'הנה: {"commands":[{"type":"start","table":13,"item":"פסטה","seconds":300,"confidence":0.9}]}',
     )
     j = say(client, stt, "שולחן שלוש עשרה צריך חמש דקות בערך").get_json()
-    # הפרסר הדטרמיניסטי כבר מזהה זאת? אם כן ה-LLM לא נקרא; אם לא, הפקודה מה-LLM מוחלת
     assert j["ignored"] is False
     assert state(client)["timers"][0]["table"] == 13
 
@@ -647,9 +648,9 @@ def test_llm_fallback_used_when_parser_finds_nothing(client, stt, rad, monkeypat
     monkeypatch.setattr(radio, "call_llm", fake)
     j = say(client, stt, "שולחן תשע דקה שבע בערך").get_json()
     assert seen, "ה-LLM היה צריך להיקרא"
-    assert j["commands"][0]["src"] if "src" in j["commands"][0] else True
+    assert j["ignored"] is False
     t = state(client)["timers"][0]
-    assert t["src"] == "llm" and t["table"] == 9 and t["duration_s"] == 420
+    assert t["src"] == "llm" and t["table"] == 9 and t["duration_s"] == 420 and t["unconfirmed"] is True
     assert "untrusted" in seen[0][0].lower()
 
 

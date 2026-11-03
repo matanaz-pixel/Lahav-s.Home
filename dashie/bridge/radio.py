@@ -559,8 +559,8 @@ def validate_llm_commands(raw: str, cfg: dict) -> list:
         conf = min(max(float(conf), 0.0), 1.0) if isinstance(conf, (int, float)) and not isinstance(conf, bool) else 0.6
         conf = min(conf, 0.85)  # LLM אף פעם לא "בטוח לגמרי"
         cmd = _cmd(c["type"], table, item, secs, conf, src="llm")
-        if c["type"] == "start" and (table is None or conf < 0.8):
-            cmd["unconfirmed"] = True
+        if c["type"] == "start":
+            cmd["unconfirmed"] = True  # מה שהפרסר הדטרמיניסטי לא הבין תמיד דורש אישור אנושי
         out.append(cmd)
     return out[:MAX_TABLES_PER_CLAUSE]
 
