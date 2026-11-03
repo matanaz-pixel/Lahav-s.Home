@@ -43,6 +43,9 @@ Plus2: holding PWR for a few seconds still powers the stick off (hardware behavi
 |---|---|
 | `src/layout.h` | screen geometry for 320x240 and 240x135 |
 | `src/main.cpp` | state machine, audio, IMU, screens, networking |
+| `src/shift.h`, `src/shift.cpp` | shift mode logic: storage (SD / LittleFS), streaming note writer, upload queue, `/shift/finish` |
+| `src/bridge_net.h` | shared bridge helpers (base URL, token, https client, ISO time); a future hub module reuses it |
+| `partitions_plus2.csv` | Plus2 partition table (2 MB app + ~6 MB LittleFS) |
 | `src/trigger.h` | "double shout" voice trigger + Edge Impulse hook (`USE_EI_KWS`) |
 | `src/face.h` | animated face (moods: neutral/happy/worried/angry/confused/listen/think/talk) |
 | `src/strings.h` | ALL UI strings, EN + HE table; language switch in Settings (saved in Preferences) |
@@ -126,8 +129,10 @@ works with your car: a short two-tone beep should come out of the car speakers w
 
 ## Plus2 notes (envs `plus2`, `plus2_a2dp`)
 - **Hardware:** ESP32-PICO-V3-02, 8 MB flash, **2 MB PSRAM**, 135x240 ST7789, PDM mic, MPU6886, buzzer, buttons A/B/PWR.
-  PlatformIO has no board file for it; `board = m5stick-c` is used with the flash size forced to 8 MB (`default_8MB.csv`),
+  PlatformIO has no board file for it; `board = m5stick-c` is used with the flash size forced to 8 MB (`partitions_plus2.csv`),
   and M5Unified/M5GFX detect the Plus2 at run time. `-DBOARD_HAS_PSRAM` comes from the shared flags.
+  The partition table is `partitions_plus2.csv` (2 MB app + ~6 MB LittleFS for shift-mode notes instead of `default_8MB.csv`);
+  changing the partition table needs a normal USB flash (`pio run -e plus2 -t upload`), not OTA. `plus2_a2dp` uses 81 % of the 2 MB app slot.
 - **Memory:** internal RAM is the same ~320 KB as on the Core2, so Wi-Fi + A2DP is exactly as tight as there
   (`A2DP_MIN_FREE_HEAP` check + fallback are shared). What differs is PSRAM: 2 MB instead of 8 MB. A voice request
   peaks at about 0.25 MB (recording 192 KB + sprite 65 KB + JSON) plus the downloaded reply WAV (<= `AUDIO_MAX_BYTES`,
@@ -140,3 +145,57 @@ works with your car: a short two-tone beep should come out of the car speakers w
 - **Hebrew:** same font hook as the other boards; a 20 px font is wide on 240 px, so check long labels.
 - **Not verified on hardware:** everything. The three builds compile and the layout maths is unit-checked on the PC,
   but fit of text on the 135 px panel, button feel, rotation, IMU axes and A2DP on this board have never run.
+
+## Shift mode (all envs; `-DSHIFT_ENABLED=0` compiles it out)
+Voice notes during a work shift, uploaded to the bridge, which e-mails / files / reads back a summary
+(`../SPEC_SHIFT.md`, bridge side: `../bridge/README.md`). Code: `src/shift.cpp` + `shift.h` (storage, writer, uploads, finish),
+the UI glue is in `main.cpp` ("Shift mode UI"), shared bridge helpers in `src/bridge_net.h`.
+
+**Use it**
+1. **Start:** B until the *Shift* screen, then **hold A** (Core2: touch zone A, Plus2: button A).
+2. **Note:** one physical button. Core2: the side button (`BtnPWR`) click = start, click again = stop.
+   Plus2: **A** click. Vibration (Core2) / beeps (Plus2): 1 = recording, 2 = saved, 3 = error / auto-stop at 90 s.
+   Notes under 1 s are discarded, so a double press is a silent "peek" at the screen.
+3. **Pocket mode:** after 10 s without input the screen turns off and (Core2) the touch zones are ignored; only the
+   physical button works. Voice trigger is off during a shift. Recording happens only on a click, never continuously.
+4. **End:** hold the note button (~1 s Core2, 1.5 s Plus2), confirm with one click within 6 s. Four wrap-up questions
+   appear (click = record the answer, hold = skip; question 4 is followed by the upload + summary). Needs Wi-Fi to
+   finish: without it the shift is saved and sent later in the background (a vibration tells you the summary is ready;
+   **B-hold / C on the Shift screen = "Read last summary"**).
+5. **Pending follow-ups:** if the bridge asks up to 3 follow-up questions they are shown the same way; the answers are
+   uploaded as notes with `X-Kind: answer`.
+
+**Storage:** Core2/CoreS3 -> SD card, 16 kHz (LittleFS fallback at 8 kHz when no card is inserted). Plus2 -> LittleFS, 8 kHz
+(~16 KB/s, ~6 MB ~ 6 min; the Shift screen shows the minutes left). Notes are written as `.tmp` and renamed to
+`nNNNN_<epoch>.wav` (`aNNNN_...` = answer) when they end; a note cut off by a crash or battery pull is repaired and queued at
+the next boot. A note is deleted from the device only after the bridge acknowledged it (HTTP 200, also for `duplicate`).
+A note the bridge rejects for good (400/413/415/422) is parked as `*.rej` so it cannot block the queue.
+The shift state (id, seq counter, "finishing") is kept in NVS, so it survives a reboot / battery swap.
+
+**Bridge contract used** (`/shift/*`, Bearer `BRIDGE_TOKEN` if set): `POST /shift/start {shift_id, started_at}`;
+`POST /shift/note` (WAV body; `X-Shift-Id`, `X-Seq`, `X-Time`, `X-Kind: answer`); `POST /shift/finish {shift_id, ended_at}` ->
+`done {summary_md, spoken, audio_urls[]}` or `need_info {questions[]}`. Times are ISO 8601 in local time with offset.
+`audio_urls` are downloaded and **merged into one WAV in PSRAM** so the A2DP kit connects once; the budget is
+`SHIFT_AUDIO_MAX_BYTES` (Core2 2.5 MB ~ 75 s, Plus2 1 MB ~ 30 s), longer summaries are cut short (the text is shown in full).
+`HTTPClient` cannot wait longer than 65 s for a response, while the bridge may need ~90 s: the device simply asks again
+(the bridge answers from its cache once done). While waiting, the screen shows "Sending / Summarizing" for up to
+`SHIFT_FINISH_WAIT_MS` (130 s); after that the shift keeps finishing in the background.
+
+**Config (`src/config.h`):** `BRIDGE_TOKEN` (`SHIFT_BRIDGE_TOKEN` is an alias), `SHIFT_BRIDGE_BASE`, `SHIFT_NOTE_MAX_S` (90),
+`SHIFT_NOTE_MIN_MS`, `SHIFT_POCKET_MS` (10000), `SHIFT_LOW_BATT_PCT` (20), `SHIFT_FINISH_WAIT_MS`, `SHIFT_AUDIO_MAX_BYTES`,
+`SHIFT_SPOKEN_QUESTIONS` (0: the bridge has no endpoint for spoken wrap-up questions; they are text + vibration).
+Wi-Fi is the single `WIFI_SSID` (kitchen network *or* phone hotspot); there is no multi-network list yet.
+The clock: RTC (UTC) seeds the system time at boot, NTP corrects it and is written back every 6 h. If the clock was never set
+the shift has no times and the summary has no date.
+
+**Behaviour changes outside shift mode (only if you set a token):** none. With `SHIFT_ENABLED=0` the binary is the same code
+as before plus ~1.5 KB (`fetchWav` / `startPlayback` refactor, extra enum values).
+
+**Not verified on hardware (all of it):** SD init on the Core2 shared SPI bus (pins come from `M5.getPin(sd_spi_*)`:
+18/23/38/4; the display and the SD writer take a mutex around each other, untested), the `BtnPWR` click / ~1 s hold
+semantics of the AXP192, the vibration motor feedback timing, pocket-mode touch lock, the Plus2 partition layout and
+LittleFS capacity, note writer back-pressure (a full ring drops frames and counts `overruns`), upload while the A2DP
+kit or the assistant is active (uploads pause then), memory use of Wi-Fi + TLS during a shift, and the layout of the Shift
+and wrap-up screens on 240x135 (only compiled). Plus2: A as note button means no assistant button during a shift.
+Not implemented: spoken wrap-up questions (needs a bridge endpoint), multi-network Wi-Fi, a "hub" module
+(extension point marked in `loop()`; shared helpers are in `bridge_net.h`).
