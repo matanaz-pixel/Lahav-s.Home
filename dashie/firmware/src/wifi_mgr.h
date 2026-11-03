@@ -23,6 +23,10 @@
 
 namespace wifimgr {
 
+// Compile-time "is any network configured?". With none (the shipped default) every function below folds to nothing,
+// so no Wi-Fi driver code is linked at all. That matters for the A2DP envs, see the IRAM note in the README.
+static constexpr bool kAny = sizeof(WIFI_SSID) > 1 || sizeof(WIFI_SSID_2) > 1 || sizeof(WIFI_SSID_3) > 1 || sizeof(WIFI_SSID_4) > 1;
+
 struct Net { const char* ssid; const char* pass; };
 static const Net kNets[4] = {
   {WIFI_SSID, WIFI_PASS}, {WIFI_SSID_2, WIFI_PASS_2}, {WIFI_SSID_3, WIFI_PASS_3}, {WIFI_SSID_4, WIFI_PASS_4},
@@ -40,6 +44,7 @@ static int8_t lastIdx = -1;                  // which entry of kNets the current
 inline uint8_t configured() { return count; }
 inline bool enabled() { return state != S::OFF; }
 inline void hold(bool h) { held = h; }
+// SSID of the entry the manager joined (the config is the source of truth: no Wi-Fi API call, no extra code linked).
 inline const char* currentSsid() { return lastIdx >= 0 ? kNets[lastIdx].ssid : ""; }
 
 inline uint32_t backoffMs() {
@@ -53,6 +58,7 @@ inline void fail(uint32_t now) {
 }
 
 inline void begin() {
+  if (!kAny) { state = S::OFF; return; }
   count = 0;
   for (auto& n : kNets) if (n.ssid && n.ssid[0]) count++;
   if (!count) { state = S::OFF; return; }
@@ -69,13 +75,9 @@ inline void startConnect(int idx, uint32_t now) {
 }
 
 inline void loop(uint32_t now) {
-  if (state == S::OFF) return;
+  if (!kAny || state == S::OFF) return;
   if (WiFi.status() == WL_CONNECTED) {       // connected: nothing to do until it drops
     if (state != S::IDLE || tries || attempts) { state = S::IDLE; tries = 0; attempts = 0; nextTry = 0; }
-    if (lastIdx < 0) {                       // joined by someone else (should not happen): find which entry it is
-      String s = "";
-      for (int i = 0; i < 4; i++) if (kNets[i].ssid[0] && s == kNets[i].ssid) { lastIdx = i; break; }
-    }
     return;
   }
   if (held) return;

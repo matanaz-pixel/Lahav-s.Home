@@ -6,5 +6,3 @@ __pycache__/
 .pytest_cache/
 hub_state.json
 hub_state.json.lock
-radio_state.json
-radio_state.json.lock

@@ -33,11 +33,6 @@ from hub import bp as hub_bp, handle_voice_intent  # noqa: E402
 
 app.register_blueprint(hub_bp)
 
-# טיימרי שולחנות מהקשר: radio.py
-from radio import bp as radio_bp  # noqa: E402
-
-app.register_blueprint(radio_bp)
-
 EL_KEY = os.environ.get("ELEVENLABS_API_KEY")
 AN_KEY = os.environ.get("ANTHROPIC_API_KEY")
 MODEL = os.environ.get("DASHIE_MODEL", "claude-haiku-5-5")

@@ -138,7 +138,7 @@ static bool hello() {
   JsonDocument d;
   d["device_id"] = devId;
   d["role"] = isCar() ? "car" : "pocket";
-  d["ssid"] = WiFi.SSID();
+  d["ssid"] = wifimgr::currentSsid();
   if (gBatt >= 0) d["battery"] = (int)gBatt;
   if (gNotes >= 0) d["notes_pending"] = (int)gNotes;
   d["shift_active"] = (bool)gShift;
@@ -246,7 +246,7 @@ static void task(void*) {
       bool ok = hello();
       uint32_t interval = gPollMs ? (uint32_t)gPollMs : (uint32_t)HUB_POLL_FAST_S * 1000UL;
       if (!isCar()) {                                                    // pocket away from the car hotspot: save battery
-        bool onCar = strlen(HUB_CAR_SSID) && WiFi.SSID() == HUB_CAR_SSID;
+        bool onCar = HUB_CAR_SSID[0] && strcmp(wifimgr::currentSsid(), HUB_CAR_SSID) == 0;
         if (!onCar) interval = max<uint32_t>(interval, (uint32_t)HUB_POLL_SLOW_S * 1000UL);
       }
       if (ok) fails = 0; else if (fails < 4) fails++;
