@@ -6,3 +6,7 @@ __pycache__/
 .pytest_cache/
 hub_state.json
 hub_state.json.lock
+recipes_device.json
+recipes_device.tmp
+recipes_cache*
+recipes_aliases.json

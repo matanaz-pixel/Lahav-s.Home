@@ -33,6 +33,11 @@ from hub import bp as hub_bp, handle_voice_intent  # noqa: E402
 
 app.register_blueprint(hub_bp)
 
+# ספר המתכונים של רוברטה וינצ'י (נטען אונליין, בכפוף לאישור מכשיר בגיליון): recipes.py
+import recipes  # noqa: E402
+
+app.register_blueprint(recipes.bp)
+
 EL_KEY = os.environ.get("ELEVENLABS_API_KEY")
 AN_KEY = os.environ.get("ANTHROPIC_API_KEY")
 MODEL = os.environ.get("DASHIE_MODEL", "claude-haiku-5-5")
@@ -137,7 +142,11 @@ def voice():
         if intent:
             reply, action = intent["reply"], intent["action"]
         else:
-            reply, action = llm(text) or builtin(text), "face:happy"
+            rec = recipes.handle_voice(text, request.headers.get("X-Mode"), request.headers.get("X-Device-Id"))
+            if rec:
+                reply, action = rec["reply"], rec["action"]
+            else:
+                reply, action = llm(text) or builtin(text), "face:happy"
         audio_url = None
         try:
             wav = tts_wav(reply)
@@ -148,6 +157,15 @@ def voice():
         return jsonify(text=text, reply=reply, action=action, audio_url=audio_url)
     except requests.RequestException as e:
         return jsonify(text="", reply="Bridge error", action="face:confused", error=str(e)), 200
+
+
+def _recipes_audio_url(text: str):
+    """קול לתשובת /recipes/ask (אותו TTS ואותו אחסון כמו /voice)."""
+    wav = tts_wav(text)
+    return f"{request.host_url}audio/{store_audio(wav)}.wav" if wav else None
+
+
+recipes.set_audio_hook(_recipes_audio_url)
 
 
 @app.get("/audio/<key>.wav")
