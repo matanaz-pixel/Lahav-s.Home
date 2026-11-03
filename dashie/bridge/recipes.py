@@ -310,14 +310,15 @@ def _root(c: str) -> str:
 
 
 def keys(tok: str) -> frozenset:
-    """מפתחות התאמה למילה: המילה עצמה, בלי קידומות (ו/ה/ב/כ/ל/מ/ש עד פעמיים), ובלי סיומות רבים/נקבה."""
+    """מפתחות התאמה למילה: המילה עצמה, בלי קידומות (ו/ה/ב/כ/ל/מ/ש עד פעמיים), ובלי סיומות רבים/נקבה.
+    הצורות המלאות נשארות כדי שההתאמה המטושטשת (שגיאות תמלול) תעבוד על מילים ולא על שורשים קצרים."""
     cands = {tok}
     t = tok
     for _ in range(2):
         if len(t) >= 4 and t[0] in _PREFIX:
             t = t[1:]
             cands.add(t)
-    return frozenset(_root(c) for c in cands)
+    return frozenset(cands | {_root(c) for c in cands})
 
 
 def _tok_match(qk: frozenset, tk: frozenset, fuzzy: bool) -> float:

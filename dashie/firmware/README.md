@@ -5,7 +5,7 @@ pio run -e core2            # or: cores3, plus2, core2_a2dp, plus2_a2dp
 pio run -e core2 -t upload
 pio device monitor
 ```
-Edit `src/config.h` first (Wi-Fi hotspot of your phone, `BRIDGE_URL`, timezone).
+Edit `src/config.h` first (Wi-Fi networks, `BRIDGE_URL`, timezone). **Read the IRAM warning in the Hub section before building the A2DP envs with Wi-Fi configured.**
 
 ## Boards / environments
 | env | board | notes |
@@ -44,7 +44,9 @@ Plus2: holding PWR for a few seconds still powers the stick off (hardware behavi
 | `src/layout.h` | screen geometry for 320x240 and 240x135 |
 | `src/main.cpp` | state machine, audio, IMU, screens, networking |
 | `src/shift.h`, `src/shift.cpp` | shift mode logic: storage (SD / LittleFS), streaming note writer, upload queue, `/shift/finish` |
-| `src/bridge_net.h` | shared bridge helpers (base URL, token, https client, ISO time); a future hub module reuses it |
+| `src/bridge_net.h` | shared bridge helpers (base URL, token, https client, ISO time); used by shift and hub |
+| `src/hub.h`, `src/hub.cpp` | hub worker task: heartbeat/poll, commands, acks, crash alert (car <-> pocket) |
+| `src/wifi_mgr.h` | Wi-Fi manager: up to 4 networks, joins the strongest, backoff reconnect |
 | `partitions_plus2.csv` | Plus2 partition table (2 MB app + ~6 MB LittleFS) |
 | `src/trigger.h` | "double shout" voice trigger + Edge Impulse hook (`USE_EI_KWS`) |
 | `src/face.h` | animated face (moods: neutral/happy/worried/angry/confused/listen/think/talk) |
@@ -183,8 +185,10 @@ The shift state (id, seq counter, "finishing") is kept in NVS, so it survives a 
 
 **Config (`src/config.h`):** `BRIDGE_TOKEN` (`SHIFT_BRIDGE_TOKEN` is an alias), `SHIFT_BRIDGE_BASE`, `SHIFT_NOTE_MAX_S` (90),
 `SHIFT_NOTE_MIN_MS`, `SHIFT_POCKET_MS` (10000), `SHIFT_LOW_BATT_PCT` (20), `SHIFT_FINISH_WAIT_MS`, `SHIFT_AUDIO_MAX_BYTES`,
-`SHIFT_SPOKEN_QUESTIONS` (0: the bridge has no endpoint for spoken wrap-up questions; they are text + vibration).
-Wi-Fi is the single `WIFI_SSID` (kitchen network *or* phone hotspot); there is no multi-network list yet.
+`SHIFT_SPOKEN_QUESTIONS` (1: the wrap-up questions are spoken from `GET /shift/question/<n>.wav` on boards with a speaker, i.e. Core2/CoreS3;
+on the Plus2 (buzzer only) they stay text + vibration, and if the bridge has no TTS configured it answers 404 and the question stays text).
+Questions always play on the device's own speaker, never over the A2DP kit.
+Wi-Fi: up to four networks (`WIFI_SSID`, `WIFI_SSID_2..4`), see the Hub section.
 The clock: RTC (UTC) seeds the system time at boot, NTP corrects it and is written back every 6 h. If the clock was never set
 the shift has no times and the summary has no date.
 
@@ -197,5 +201,66 @@ semantics of the AXP192, the vibration motor feedback timing, pocket-mode touch 
 LittleFS capacity, note writer back-pressure (a full ring drops frames and counts `overruns`), upload while the A2DP
 kit or the assistant is active (uploads pause then), memory use of Wi-Fi + TLS during a shift, and the layout of the Shift
 and wrap-up screens on 240x135 (only compiled). Plus2: A as note button means no assistant button during a shift.
-Not implemented: spoken wrap-up questions (needs a bridge endpoint), multi-network Wi-Fi, a "hub" module
-(extension point marked in `loop()`; shared helpers are in `bridge_net.h`).
+Not implemented: a note-taking mode for the car device while the pocket device is the recorder (they do not share notes).
+
+## Hub: car device + pocket device (all envs; `-DHUB_ENABLED=0` compiles it out)
+
+Two Dashies coordinate **through the bridge** (no radio between them). Contract and server side: `bridge/hub.py`, `bridge/README.md` "Hub".
+
+| role | default board | what it does |
+|---|---|---|
+| **car** | Core2 (any non-"buttons only" board) | speaks the finished shift summary when you get in; shows the pocket device on a new screen (B cycles to **Pocket device**: link, pocket status, battery, notes waiting, shift active, "In car"); sends a crash alert to the pocket device |
+| **pocket** | Plus2 (`DASHIE_BUTTONS_ONLY`) | vibrates / beeps hard on a crash alert from the car; beeps on "where is my pocket device?" until you press any button |
+
+Override the role with `-DHUB_ROLE_POCKET=1` (or `0`). The device id is `car-<MAC>` / `pkt-<MAC>`.
+
+**How it works.** One worker task does all hub network I/O and never touches M5 / the display / I2C: the main loop feeds it
+the battery %, notes waiting and shift flag once a second and picks commands up. `POST /hub/hello` is both heartbeat and poll
+(`poll_s` from the bridge, 10 s car / 20 s pocket). Commands are **acked when accepted**, not when finished; a busy device
+(recording a note, assistant active, A2DP running) leaves the command un-acked and pending, the bridge redelivers it
+(3 times, 10 min TTL). Accepted ids are remembered (16), so a redelivery after a lost ack is not run twice. A 404 on ack = expired.
+
+**Commands.** `read_summary` (car): downloads the signed `audio_urls`, merges them and plays them through the normal reply path
+(A2DP kit first when built with it, own speaker otherwise), same memory limits as "Read last summary". `vibrate` / `find_me`
+(pocket): new `PALERT` / `FIND` states, forced to full volume, screen switched on even in pocket mode, stop on any button or after
+`HUB_PALERT_MAX_S` (120 s) / the bridge's `duration_s` (max `HUB_FIND_MAX_S`). A running note is saved first.
+
+**Crash alert.** When the car device detects an impact, `POST /hub/alert {device_id, type:"crash", g, ts}` is sent in addition
+to the local "Are you OK?" screen, retried for `HUB_ALERT_RETRY_S` (90 s) while Wi-Fi/bridge are down; `ts` de-duplicates.
+`HUB_ALERT_ON_TIMEOUT_ONLY=1` sends it only if the 15 s countdown ends without being cancelled (fewer false alarms,
+at most 15 s later). A pocket device ignores its own IMU crash detection while a shift is active (`HUB_POCKET_NO_CRASH`,
+a knock in a kitchen pocket must not start a 15 s alarm).
+
+**Wi-Fi manager (`wifi_mgr.h`, also used with `HUB_ENABLED=0`).** `WIFI_SSID[_2.._4]` / `WIFI_PASS[_2.._4]`: kitchen network at work
++ phone hotspot in the car. Disconnected -> scan -> join the **strongest** configured network; reconnect backoff 3 s ... 60 s;
+modem sleep on. A2DP envs do not scan (see below); they try the entries in list order, 8 s each. Set `HUB_CAR_SSID` to the
+hotspot name, **identical to `HUB_CAR_SSID` on the bridge**: that is how "you are in the car" is detected, and the pocket device
+polls fast only while it is on that SSID (otherwise every `HUB_POLL_SLOW_S`, 60 s, to save its 200 mAh battery).
+
+**Config:** `HUB_ENABLED`, `HUB_ROLE_POCKET`, `HUB_CAR_SSID`, `HUB_POLL_FAST_S`, `HUB_POLL_SLOW_S`, `HUB_ALERT_ON_TIMEOUT_ONLY`,
+`HUB_ALERT_RETRY_S`, `HUB_PALERT_MAX_S`, `HUB_FIND_MAX_S`, `HUB_POCKET_NO_CRASH`, `WIFIMGR_SCAN`, `BRIDGE_TOKEN`.
+`/voice` now also sends `X-Device-Id` and the Bearer token (needed for the spoken hub commands "where is my pocket device" / "read my summary").
+Audio downloads send the Bearer token only to the bridge's own origin.
+
+### IRAM limit: A2DP envs and Wi-Fi (pre-existing, found while building the hub)
+**`core2_a2dp` and `plus2_a2dp` do not link once a Wi-Fi network is configured** (`WIFI_SSID` non-empty):
+`region 'iram0_0_seg' overflowed by 2004 bytes` (Core2; 1876 on Plus2). It is **not** caused by the hub: the commit before the hub
+(shift mode) fails the same way with `-DWIFI_SSID=\"x\"`. With the shipped default (empty SSID) the compiler removes all Wi-Fi
+driver calls, the link fits, and the build looked fine. The Bluetooth controller (~31 KB), the Wi-Fi driver and the system
+libraries already fill the 128 KB IRAM of the prebuilt Arduino core; the Wi-Fi driver objects that `WiFi.begin()` pulls in are the last ~2 KB.
+Nothing in this firmware lives in IRAM (checked in the link map), so it can not be fixed from the sketch.
+`wifi_mgr.h` keeps the default config linkable (`kAny` folds to nothing when no SSID is set) and avoids the scan API in A2DP envs,
+but the real fix is a core with a smaller IRAM footprint: build the Arduino core with its own `sdkconfig`
+(PlatformIO `framework = arduino, espidf` + `custom_sdkconfig`, or `esp32-arduino-lib-builder`) - not tried, long build.
+Until then, for a Wi-Fi-connected car device use **`core2`** (own speaker, no A2DP) or accept that the A2DP envs only run with Wi-Fi off.
+
+### Memory / battery notes
+- `plus2_a2dp` app slot: 82.2 % (was 81.5 % before the hub). `core2` flash 15 %.
+- A Plus2 with Wi-Fi on for a whole shift will not last 8 h on its 200 mAh battery even with modem sleep and slow polling.
+  Expect a few hours; charge it, or accept uploading only when you are near Wi-Fi. Not measured.
+
+### Not verified on hardware
+Everything above: it compiles (see `pio run -e core2|cores3|plus2|core2_a2dp|plus2_a2dp`, also with `-DHUB_ENABLED=0` and `-DSHIFT_ENABLED=0`),
+the bridge side is covered by `bridge/tests`, but no hub command, alert, scan or reconnect has run on a real device. In particular:
+Wi-Fi scan/join behaviour with two networks, the 10 s / 20 s poll cost, vibration/beep loudness of the alert on a Plus2 buzzer in a pocket,
+the peer screen layout, and the ack/redelivery timing under real packet loss.
