@@ -140,14 +140,28 @@ ol.notes li.empty{color:var(--muted)}
 .paper p{margin:4px 0}
 .dchip{display:inline-block;background:#1a73e8;color:#fff;border-radius:6px;padding:0 7px;font:700 11px var(--mono)}
 ul.priv{margin:0;padding-inline-start:20px;display:grid;gap:6px;font-size:.9rem}
+
+/* character + gallery + new panels */
+.seg4{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.seg4 button{font:700 .88rem var(--sans);text-align:center;padding:9px 8px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);color:var(--fg);cursor:pointer;display:grid;gap:2px}
+.seg4 button small{font:500 .74rem var(--sans);color:var(--muted)}
+.seg4 button:hover{border-color:var(--accent)}
+.seg4 button[aria-checked="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.gal{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:10px;margin-top:10px}
+.gal figure{margin:0;background:#000;border:1px solid var(--line);border-radius:10px;overflow:hidden;display:grid}
+.gal canvas{display:block;width:100%;height:auto;aspect-ratio:4/3}
+.gal figcaption{background:var(--panel2);padding:5px 8px;font:600 .8rem var(--sans);text-align:center;border-top:1px solid var(--line)}
+textarea{width:100%;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font:inherit;min-height:64px;resize:vertical;direction:ltr;text-align:left}
+.note{border-inline-start:3px solid var(--info);padding:6px 10px;background:var(--panel2);border-radius:6px;margin-top:10px;font-size:.86rem}
+.wide{grid-column:1/-1}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 <div class="wrap">
 <header>
-  <h1><b>Dashie</b> – העוזר הקטן שיושב על הדשבורד</h1>
-  <p>הדמיה שרצה על אותה לוגיקה כמו הקושחה: מכונת מצבים, הפעלה בקול בקריאה כפולה, זיהוי בלימות ותאונה. אפשר לדבר אל המיקרופון האמיתי או לסמלץ.</p>
+  <h1><b>Dashie</b> – הדמות והממשק על המסך</h1>
+  <p>כל מה שמוצג על מסך המכשיר, בעברית: אותם מסכים, מצבים, פריסה וטקסטים כמו בקושחה (strings.h, layout.h, main.cpp). אפשר לבחור עיצוב דמות, ללחוץ על הכפתורים ולנסות הכול. המכשיר האמיתי יציג עברית אחרי שייווצר הקובץ font_he.h; בלעדיו הוא מציג אנגלית.</p>
 </header>
 
 <div class="grid">
@@ -164,7 +178,7 @@ ul.priv{margin:0;padding-inline-start:20px;display:grid;gap:6px;font-size:.9rem}
     <div class="device" id="device" data-board="core2" aria-label="M5Stack Core2">
       <div class="scr">
         <div class="bezel"><canvas id="lcd" width="640" height="480" aria-label="מסך Dashie"></canvas></div>
-        <button class="mbtn" id="pA" title="A – כפתור קדמי (מקש a, לחיצה ארוכה: מקש x)" hidden>A</button>
+        <button class="mbtn" id="pA" title="A – כפתור קדמי (מקש a, החזקה: מקש x)" hidden>A</button>
       </div>
       <div class="touchbtns" id="touchBtns">
         <button class="tb" id="bA" title="A (מקש a)">A</button>
@@ -173,7 +187,7 @@ ul.priv{margin:0;padding-inline-start:20px;display:grid;gap:6px;font-size:.9rem}
       </div>
       <div class="siderow" id="sideRow">
         <span dir="rtl">כפתור צד (PWR)</span>
-        <button class="sb" id="pS" title="כפתור צד: לחיצה קצרה = הערה, ארוכה = התחלה/סיום/הערה מהכיס (מקשים n / h)">● REC</button>
+        <button class="sb" id="pS" title="כפתור צד: לחיצה = הערה, החזקה = סיום משמרת (מקשים n / e)">● REC</button>
       </div>
       <div class="stickrow" id="stickRow" hidden>
         <span dir="rtl">כפתורי צד</span>
@@ -192,10 +206,67 @@ ul.priv{margin:0;padding-inline-start:20px;display:grid;gap:6px;font-size:.9rem}
       </div>
       <p class="hint" id="btnHint"></p>
     </div>
+    <section class="card" aria-labelledby="charH">
+      <h2 id="charH"><span>●</span> הדמות</h2>
+      <div class="seg4" role="radiogroup" aria-label="בחר עיצוב דמות">
+        <button type="button" role="radio" aria-checked="true" data-char="bean">שעועית-רובוט<small>ראש עגול, אנטנה ועיניים זוהרות</small></button>
+        <button type="button" role="radio" aria-checked="false" data-char="pixel">פיקסל רטרו<small>בלוקים של 8 ביט</small></button>
+        <button type="button" role="radio" aria-checked="false" data-char="line">קווית מינימליסטית<small>עיניים וקווים, בלי ראש</small></button>
+        <button type="button" role="radio" aria-checked="false" data-char="classic">קלאסית<small>כמו שהיא בקושחה היום</small></button>
+      </div>
+      <div class="row">
+        <label class="chk"><input type="checkbox" id="chefOn" checked> כובע שף כשהמכשיר במשמרת</label>
+        <label class="chk"><input type="checkbox" id="fwA2dp" checked> גרסת קושחה עם A2DP (שורת "בדיקת דיבורית" בהגדרות)</label>
+      </div>
+      <div class="row"><label class="f">גודל גופן עברי במסך (VLW)<select id="heFont"><option value="auto">אוטומטי: Core2 20, Plus2 15</option><option value="20">20 (כמו הקושחה היום)</option><option value="16">16</option><option value="14">14</option></select></label></div>
+      <p class="hint">כל העיצובים נבנו רק מפרימיטיבים של M5GFX (עיגולים, מלבנים, אליפסות, משולשים וקווים), כך שאפשר להעביר אותם ל-face.h. המפרט ב-sim/CHARACTER.md.</p>
+    </section>
   </div>
 
   <!-- RIGHT: instruments -->
   <div class="col">
+    <section class="card" aria-labelledby="rcpH">
+      <h2 id="rcpH"><span>●</span> ספר מתכונים (הכפתור שואל)</h2>
+      <p class="hint" style="margin-top:0">בהגדרות בחר "הכפתור שואל: ספר מתכונים", ואז החזק A, שאל ושחרר. כאן מוקלד מה שנשאל (במכשיר זה הקול). 4 המתכונים לדוגמה בדויים, לא הספר של רוברטה.</p>
+      <div class="row"><label class="f">השאלה<input type="text" id="rcpQ" value="באיזו טמפרטורה אופים את הלזניה?"></label>
+        <label class="f">מצב הספר ב-bridge<select id="rcpMode"><option value="ok">מחובר ומאושר</option><option value="pending">ממתין לאישור בגיליון (pending)</option><option value="blocked">הגישה נחסמה (blocked)</option><option value="unconfigured">לא מחובר, צריך הגדרה (unconfigured)</option><option value="error">הספר לא זמין (error)</option></select></label></div>
+      <div class="chips" id="rcpChips"></div>
+      <div class="row"><button class="btn pri" id="rcpAsk">שאל עכשיו (החזקת A אוטומטית)</button></div>
+      <pre class="json" id="rcpJson">{ "text": "", "reply": "", "status": null }</pre>
+    </section>
+
+    <section class="card" aria-labelledby="hubH">
+      <h2 id="hubH"><span>●</span> מכשיר כיס ומכשיר רכב (Hub)</h2>
+      <p class="hint" style="margin-top:0">מסך "מכשיר כיס" מופיע ברכב (Core2). ההתראות למטה מופיעות במכשיר הכיס (Plus2).</p>
+      <div class="row">
+        <label class="chk"><input type="checkbox" id="hubSeen" checked> מכשיר הכיס נראה</label>
+        <label class="chk"><input type="checkbox" id="hubShift" checked> משמרת פעילה בכיס</label>
+        <label class="chk"><input type="checkbox" id="hubInCar"> שני המכשירים ברכב (in_car)</label>
+      </div>
+      <div class="row">
+        <label class="f">סוללת הכיס <output id="hubBattO">76%</output><input type="range" id="hubBatt" min="3" max="100" value="76"></label>
+        <label class="f">הערות ממתינות <output id="hubNotesO">2</output><input type="range" id="hubNotes" min="0" max="12" value="2"></label>
+        <label class="f">נראה לאחרונה <output id="hubAgeO">20 שנ׳ (מחובר)</output><input type="range" id="hubAge" min="0" max="900" value="20"></label>
+      </div>
+      <div class="row">
+        <button class="btn dng" id="hubCrash">התראת פגיעה מהרכב (מגיעה לכיס)</button>
+        <button class="btn" id="hubFind">"איפה הכיס שלי?" (find_me)</button>
+        <button class="btn" id="hubRead">נכנסתי לרכב: הקרא את הסיכום (read_summary)</button>
+      </div>
+      <pre class="json" id="hubJson">{ "commands": [] }</pre>
+    </section>
+
+    <section class="card" aria-labelledby="kitH">
+      <h2 id="kitH"><span>●</span> דיבורית הרכב ("בדיקת דיבורית" בהגדרות)</h2>
+      <div class="row">
+        <label class="f">תוצאת הבדיקה<select id="kitRes"><option value="ok">מחובר</option><option value="nf">לא נמצאה (מציג רשימת מכשירים)</option><option value="to">תם הזמן</option><option value="mem">אין זיכרון</option><option value="fail">נכשל</option></select></label>
+        <label class="f">מכשירי Bluetooth שנמצאו בסריקה (שורה לכל מכשיר)<textarea id="kitFound" rows="3">deelife-NX12
+JBL Flip 5
+Galaxy S24 (Matan)</textarea></label>
+      </div>
+      <p class="hint">בחירת מכשיר מהרשימה מריצה את הבדיקה שוב ושומרת את השם, כמו בקושחה.</p>
+    </section>
+
     <section class="card" id="shiftCard" aria-labelledby="shH">
       <h2 id="shH"><span>●</span> מצב משמרת: סיכום משמרת במסעדה</h2>
       <p class="hint" style="margin:0 0 10px">מקליטים הערות קצרות בלחיצת כפתור במהלך המשמרת. בסוף Dashie שואל ארבע שאלות ומוציא סיכום: מייל, Google Doc והקראה בקול. אפשר לנתק אותו מהרכב ולשים בכיס. בזמן משמרת ההפעלה בקול כבויה.</p>
@@ -357,93 +428,568 @@ ul.priv{margin:0;padding-inline-start:20px;display:grid;gap:6px;font-size:.9rem}
     </section>
   </div>
 </div>
+
+<section class="card wide" id="galCard" aria-labelledby="galH">
+  <h2 id="galH"><span>●</span> גלריית מצבים: <span id="galName"></span></h2>
+  <p class="hint" style="margin-top:0">כל המצבים של העיצוב שנבחר, זה לצד זה. אותו קוד ציור כמו על המסך. הפה של "מדבר" זז לפי עוצמת השמע, והעיניים מצמצות ומסתכלות סביב.</p>
+  <div class="gal" id="galGrid"></div>
+</section>
 </div>
 
 <script>
 (()=>{
 "use strict";
-/* ---------- helpers ---------- */
+/* =====================================================================================
+   Dashie simulator. Everything that is drawn on the device screen mirrors the firmware
+   (firmware/src/main.cpp, layout.h, face.h, strings.h): same layout numbers, same states,
+   same Hebrew strings (the HE column of strings.h), same button mapping.
+   Characters are drawn ONLY with M5GFX-style primitives (see G below).
+   ===================================================================================== */
 const $=id=>document.getElementById(id);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const lcd=$("lcd"), ctx=lcd.getContext("2d");
-const BOARDS={
-  core2:{id:"core2",name:"M5Stack Core2",w:320,h:240,touch:true,speaker:true,brand:"M5STACK CORE2 · DASHIE",boot:"Dashie boot · Core2 · IMU MPU6886 · mic PDM 16kHz"},
-  plus2:{id:"plus2",name:"M5StickC PLUS2",w:240,h:135,touch:false,speaker:false,brand:"M5STICKC PLUS2 · DASHIE",boot:"Dashie boot · StickC PLUS2 · IMU MPU6886 · mic PDM 16kHz · buzzer · A2DP→car kit"}
+const lcd=$("lcd");
+let ctx=lcd.getContext("2d");
+
+/* ---------- strings: generated from firmware/src/strings.h (HE column) ---------- */
+const T={
+  S_TALK:"דבר",
+  S_NEXT:"הבא",
+  S_OPT:"שנה",
+  S_RESET:"אפס",
+  S_LISTENING:"מקשיב...",
+  S_RECORDING:"מקליט",
+  S_THINKING:"חושב...",
+  S_ERR_NOWIFI:"אין Wi-Fi",
+  S_ERR_NOBRIDGE:"אין שרת",
+  S_ERR_BRIDGE:"שגיאת שרת",
+  S_ERR_MEM:"אין זיכרון",
+  S_ERR_NOCATCH:"לא שמעתי",
+  S_ERR_BUSY:"עסוק, נסה שוב",
+  S_NOREPLY:"(אין תשובה)",
+  S_NONLATIN:"(התשובה דורשת פונט)",
+  S_IMPACT:"זוהתה פגיעה!",
+  S_AREYOUOK:"הכול בסדר?",
+  S_TAPCANCEL:"לחץ לביטול",
+  S_SOS:"קרא לעזרה!",
+  S_NOISE:"רעש בתא",
+  S_GFORCE:"כוחות G",
+  S_TRIP:"נסיעה",
+  S_SETTINGS:"הגדרות",
+  S_MAXG:"G מרבי",
+  S_BRAKES:"בלימות חדות",
+  S_TURNS:"פניות חדות",
+  S_TIME:"זמן",
+  S_AVGNOISE:"רעש ממוצע",
+  S_BESTQUIET:"שיא שקט",
+  S_QUIET:"שקט",
+  S_WHOA:"וואו!",
+  S_PRESS_AGAIN:"לחץ שוב לאיפוס",
+  S_BRIGHT:"בהירות",
+  S_VOLUME:"עוצמה",
+  S_SENS:"רגישות קול",
+  S_THEME:"ערכת צבעים",
+  S_VOICE:"הפעלה בקול",
+  S_LANG:"שפה",
+  S_LOW:"נמוכה",
+  S_MED:"בינונית",
+  S_HIGH:"גבוהה",
+  S_ON:"פעיל",
+  S_OFF:"כבוי",
+  S_CYAN:"ציאן",
+  S_AMBER:"ענבר",
+  S_GREEN:"ירוק",
+  S_LANG_EN:"English",
+  S_LANG_HE:"עברית",
+  S_LANG_HE_NOFONT:"Hebrew (no font)",
+  S_TESTKIT:"בדיקת דיבורית",
+  S_BT_IDLE:"לחץ שנה",
+  S_BT_CONN:"מתחבר...",
+  S_BT_OK:"מחובר",
+  S_BT_NF:"לא נמצאה",
+  S_BT_TO:"תם הזמן",
+  S_BT_MEM:"אין זיכרון",
+  S_BT_FAIL:"נכשל",
+  S_BT_PICK:"בחר דיבורית",
+  S_BT_NODEV:"לא נמצא. מצב צימוד?",
+  S_BACK:"חזור",
+  S_PICK:"בחר",
+  S_SET:"הגדר",
+  S_CHANGE:"שנה",
+  S_PRESSCANCEL:"לחץ A לביטול",
+  S_BT_IDLE_BTN:"לחץ B",
+  S_SHIFT:"משמרת",
+  S_START:"התחל",
+  S_READ:"הקרא",
+  S_NOTE:"הערה",
+  S_END:"סיים",
+  S_SH_NONE:"אין משמרת פעילה",
+  S_SH_HOLDA:"החזק A להתחלה",
+  S_SH_HINT_CORE:"צד: הערה, החזק: סיום",
+  S_SH_HINT_STICK:"A: הערה, החזק A: סיום",
+  S_SH_NOTES:"הערות",
+  S_SH_QUEUE:"להעלאה",
+  S_SH_BATT:"סוללה",
+  S_SH_STORE:"אחסון",
+  S_SH_LAST:"סיכום אחרון",
+  S_SH_READY:"מוכן",
+  S_SH_NOLAST:"אין",
+  S_SH_OFFLINE:"לא מחובר",
+  S_SH_LOWSTORE:"האחסון כמעט מלא!",
+  S_SH_WRITEERR:"שגיאת כתיבה!",
+  S_SH_LOWBATT:"סוללה חלשה!",
+  S_SH_SUMREADY:"סיכום מוכן: הקרא",
+  S_REC_NOTE:"הערה",
+  S_ENDQ:"לסיים משמרת?",
+  S_ENDQ_CORE:"לחץ על הכפתור הצדדי",
+  S_ENDQ_STICK:"לחץ A לאישור",
+  S_Q1:"איך עבר הקו?",
+  S_Q2:"היו אירועים חריגים?",
+  S_Q3:"איך כל עמדה?",
+  S_Q4:"איך התנהלתי?",
+  S_Q_HINT_CORE:"צד: ענה, החזק: דלג",
+  S_Q_HINT_STICK:"A: ענה, החזק A: דלג",
+  S_SENDING:"שולח הערות...",
+  S_SUMMARIZING:"מכין סיכום...",
+  S_SAVED_OFFLINE:"נשמר. יישלח כשיש רשת",
+  S_ERR_NOSTORE:"אין אחסון",
+  S_NO_SUMMARY:"אין סיכום עדיין",
+  S_PEER:"מכשיר כיס",
+  S_PEER_NONE:"לא נראה",
+  S_LINK:"קשר לשרת",
+  S_ONLINE:"מחובר",
+  S_NEVER:"אף פעם",
+  S_INCAR:"ברכב",
+  S_YES:"כן",
+  S_NO:"לא",
+  S_ACTIVE:"פעילה",
+  S_IDLE_W:"לא פעילה",
+  S_DASH:"-",
+  S_CAR_ALERT:"התראת פגיעה מהרכב",
+  S_FINDME:"אני כאן!",
+  S_RCP_WAIT:"ממתין לאישור בגיליון",
+  S_RCP_DOWN:"הספר לא זמין כרגע",
+  S_PTT:"הכפתור שואל",
+  S_PTT_ASSIST:"עוזר",
+  S_PTT_RECIPES:"ספר מתכונים",
+  S_RCP_HOLD:"שחרר לשליחה",
+  S_RCP_WAIT:"ממתין לאישור בגיליון",
+  S_RCP_BLOCKED:"הגישה לספר נחסמה בגיליון",
+  S_RCP_SETUP:"הספר לא מחובר: להריץ הגדרה בשרת",
+  S_RCP_DOWN:"הספר לא זמין כרגע"
 };
-let BOARD=BOARDS.core2, W=320, H=240, C=false; /* C = compact layout (short screen) */
-let HH=20, FH=22; /* header / footer heights */
+
+
+/* ---------- boards ---------- */
+const BOARDS={
+  core2:{id:"core2",name:"M5Stack Core2",w:320,h:240,touch:true,speaker:true,role:"car",brand:"M5STACK CORE2 · DASHIE",boot:"Dashie boot · Core2 · IMU MPU6886 · mic PDM 16kHz · role=car"},
+  plus2:{id:"plus2",name:"M5StickC PLUS2",w:240,h:135,touch:false,speaker:false,role:"pocket",brand:"M5STICKC PLUS2 · DASHIE",boot:"Dashie boot · StickC PLUS2 · IMU MPU6886 · mic PDM 16kHz · buzzer · role=pocket"}
+};
+let BOARD=BOARDS.core2, W=320, H=240, L=null, HEF=20;   /* HEF = Hebrew glyph size of the VLW font at sz>=2 (sz 1 = 0.8x) */
+
+/* ---------- layout: exact copy of firmware/src/layout.h ---------- */
+function mkLayout(w,h){
+  const o={W:w,H:h,compact:false,
+    barY:214,barTextY:219, faceCy:100,listenCy:96,thinkCy:96,errCy:90,faceS:1.0,errS:0.8,
+    clockSz:2,clockY:6,wifiY:6,dotX:12,dotY:26,dotR:4, statusY:196,errY:190,whoaY:186,
+    noiseTitleX:8,noiseTitleY:6,noiseFaceX:62,noiseFaceY:100,noiseFaceS:0.42,
+    bigNumX:205,bigNumY:38,dbX:296,dbY:78,quietX:160,quietY:104,
+    histX:10,histBase:205,histStep:5,histW:4,histMaxH:90,
+    gCx:160,gCy:108,gR:84,gBall:9,gStatX:[8,312,312],gStatAlign:[0,2,2],gStatLabelY:[6,6,44],gStatValueY:[18,18,56],
+    rowY0:14,rowPitch:32,rowMargin:10,pressY:196,
+    setY0:10,setPitch6:33,setPitch7:28,setVisible:7,setRectDy:5,pickTitleY:6,pickY0:34,pickPitch:22,pickRectH:21,pickVisible:8,
+    recFaceY:52,recFaceS:0.5,waveX:8,waveStep:5,waveW:3,waveBase:150,waveMaxH:70,
+    replyFaceX:160,replyFaceY:46,replyFaceS:0.5,replyTextY:100,replyBottom:210,replyLineLatin:18,replyLineHe:24,wrapW:300,margin:8,
+    crashY1:20,crashY2:56,crashNumY:96,crashHintY:190,crashSosY:100,
+    shHintY:186,shHint2Y:0,sqTitleY:8,sqTextY:44,sqHintY:192};
+  o.compact=(h<200);
+  if(o.compact){
+    o.barY=h-17; o.barTextY=o.barY+1;
+    o.faceCy=o.listenCy=o.thinkCy=o.errCy=44; o.faceS=0.75; o.errS=0.7;
+    o.clockSz=1;o.clockY=2;o.wifiY=2;o.dotX=8;o.dotY=20;o.dotR=3;
+    o.statusY=h-20;o.errY=h-22;o.whoaY=o.barY+1;
+    o.noiseTitleX=4;o.noiseTitleY=2;o.noiseFaceX=30;o.noiseFaceY=64;o.noiseFaceS=0.3;
+    o.bigNumX=130;o.bigNumY=14;o.dbX=184;o.dbY=44;o.quietX=w/2;o.quietY=66;
+    o.histX=(w-60*3)/2;o.histBase=o.barY-4;o.histStep=3;o.histW=2;o.histMaxH=36;
+    o.gCx=62;o.gCy=60;o.gR=50;o.gBall=6;
+    for(let i=0;i<3;i++){ o.gStatX[i]=w-4; o.gStatAlign[i]=2; }
+    o.gStatLabelY=[3,38,72]; o.gStatValueY=[12,47,81];
+    o.rowY0=2;o.rowPitch=17;o.rowMargin=6;o.pressY=o.barY-12;
+    o.setY0=7;o.setPitch6=o.setPitch7=28;o.setVisible=4;o.setRectDy=5;
+    o.pickTitleY=2;o.pickY0=18;o.pickPitch=14;o.pickRectH=13;o.pickVisible=Math.floor((o.barY-18)/14);
+    o.recFaceY=22;o.recFaceS=0.3;
+    o.waveX=(w-64*3)/2;o.waveStep=3;o.waveW=2;o.waveBase=78;o.waveMaxH=44;
+    o.replyFaceX=w/2;o.replyFaceY=18;o.replyFaceS=0.28;
+    o.replyTextY=44;o.replyBottom=h-2;o.replyLineLatin=17;o.replyLineHe=22;o.wrapW=w-16;o.margin=8;
+    o.crashY1=4;o.crashY2=24;o.crashNumY=44;o.crashHintY=h-22;o.crashSosY=50;
+    o.shHintY=76;o.shHint2Y=92;o.sqTitleY=2;o.sqTextY=22;o.sqHintY=h-22;
+  }
+  o.cx=()=>o.W/2; o.right=()=>o.W-o.margin; o.mirror=x=>o.W-x;
+  return o;
+}
 function applyBoardGeometry(){
-  W=BOARD.w; H=BOARD.h; C=H<180; HH=C?16:20; FH=C?14:22;
-  lcd.width=W*2; lcd.height=H*2; ctx.setTransform(2,0,0,2,0,0);
+  W=BOARD.w; H=BOARD.h; L=mkLayout(W,H);
+  const hf=document.getElementById("heFont"); HEF=(!hf||hf.value==="auto")?(L.compact?15:20):+hf.value;
+  lcd.width=W*2; lcd.height=H*2; ctx=lcd.getContext("2d"); ctx.setTransform(2,0,0,2,0,0);
   lcd.style.aspectRatio=W+"/"+H; lcd.style.cursor=BOARD.touch?"pointer":"default";
 }
-const COLORS=[["AMBER","#ffb02e"],["CYAN","#46d3ff"],["GREEN","#4fe08a"],["PINK","#ff6fb0"]];
-const SENS=[["LOW",16],["MED",12],["HIGH",9]];
-const SCREENS=["Face","Cabin Noise","G-Force","Trip","Settings"];
-const SETTINGS=["Brightness","Volume","Trigger","Color","Voice wake"];
-const BG="#0a0e13", FG="#e8edf2", DIM="#6b7886";
-const S={
-  a2dp:"off", a2dpAt:0, a2dpEnd:0, prevScreen:0,
-  state:"IDLE", stateT:0, screen:0,
-  set:{bright:4,vol:2,sens:1,color:0,wake:true}, setSel:0,
-  level:50, floor:50, thr:62, burstActive:false, burstStart:0, burstBad:false, bursts:[], refr:0,
-  lastTouch:0, moodOverride:0, mood:"happy", moodUntil:0,
-  micOn:false, shoutUntil:0,
-  recStart:0, speechHeard:false, lastSpeech:0, speechUntil:0, phrase:"", reply:"", errMsg:"", thinkDur:1500, recLevels:[],
-  speed:50, sax:0, say:0, impAx:0, impAy:0, impUntil:0, padAx:0, padAy:0, ax:0, ay:0, gmax:0,
-  brakeLock:false, turnLock:false, crashT:0, crash:null,
-  trip:{time:0,brakes:0,turns:0,gmax:0,noiseSum:0,noiseN:0,dist:0},
-  hist:[], histAcc:0, histN:0, quietSec:0, bestQuiet:0, quietAcc:0,
-  blinkAt:1500, blinkT:-1, lookX:0, lookY:0, lookTX:0, lookTY:0, lookAt:0,
-  samples:[], sampleAcc:0
+
+/* ---------- theme colours (firmware THEMES) ---------- */
+const THEMES=[{bg:"#000000",fg:"#ebf5ff",acc:"#00dcff"},{bg:"#000000",fg:"#ffc85a",acc:"#ff8c00"},{bg:"#000000",fg:"#c8ffd2",acc:"#00e664"}];
+const RED="#ff503c", AMBER="#ffaa28", AMBER2="#ffc800", ORANGE="#ffa050", WHITE="#ffffff";
+function hex2(c){ const n=parseInt(c.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+function mix(a,b,t){ const A=hex2(a),B=hex2(b); return "#"+A.map((v,i)=>Math.round(v+(B[i]-v)*t).toString(16).padStart(2,"0")).join(""); }
+
+/* ---------- M5GFX-style primitives. Characters may only use these (+ the helpers below). ---------- */
+const G={
+  fillScreen(c){ ctx.fillStyle=c; ctx.fillRect(0,0,W,H); },
+  fillRect(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(x,y,w,h); },
+  fillRoundRect(x,y,w,h,r,c){ r=Math.max(0,Math.min(r,w/2,h/2)); ctx.fillStyle=c; ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); ctx.fill(); },
+  drawRoundRect(x,y,w,h,r,c){ r=Math.max(0,Math.min(r,w/2,h/2)); ctx.strokeStyle=c; ctx.lineWidth=1; x+=.5;y+=.5;w-=1;h-=1; ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); ctx.stroke(); },
+  fillCircle(x,y,r,c){ if(r<=0) return; ctx.fillStyle=c; ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill(); },
+  drawCircle(x,y,r,c){ if(r<=0) return; ctx.strokeStyle=c; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.stroke(); },
+  fillEllipse(x,y,rx,ry,c){ if(rx<=0||ry<=0) return; ctx.fillStyle=c; ctx.beginPath(); ctx.ellipse(x,y,rx,ry,0,0,7); ctx.fill(); },
+  fillTriangle(x0,y0,x1,y1,x2,y2,c){ ctx.fillStyle=c; ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.lineTo(x2,y2); ctx.closePath(); ctx.fill(); },
+  drawLine(x0,y0,x1,y1,c){ ctx.strokeStyle=c; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke(); },
+  drawFastHLine(x,y,w,c){ ctx.fillStyle=c; ctx.fillRect(x,y,w,1); },
+  drawFastVLine(x,y,h,c){ ctx.fillStyle=c; ctx.fillRect(x,y,1,h); }
 };
-const accent=()=>COLORS[S.set.color][1];
+/* helpers built ONLY from primitives (they are the same code as faceMouth() in face.h) */
+function tline(x0,y0,x1,y1,th,c){ th=Math.max(1,Math.round(th)); for(let k=-Math.floor(th/2);k<=Math.floor(th/2);k++) G.drawLine(x0,y0+k,x1,y1+k,c); }
+/* polyline arc, angles in degrees, 0 = 3 o'clock, clockwise (screen coordinates); 12 segments per call */
+function arc(cx,cy,r,a0,a1,th,c){
+  const n=Math.max(6,Math.round(Math.abs(a1-a0)/12)); let px=cx+r*Math.cos(a0*Math.PI/180), py=cy+r*Math.sin(a0*Math.PI/180);
+  for(let i=1;i<=n;i++){ const a=(a0+(a1-a0)*i/n)*Math.PI/180, x=cx+r*Math.cos(a), y=cy+r*Math.sin(a); tline(px,py,x,y,th,c); px=x; py=y; }
+}
+
+/* ---------- text: same rules as say()/row()/textW() in main.cpp, Hebrew UI (HE font + RTL) ---------- */
+const FONT_HE='"Heebo","Assistant","Segoe UI","Arial Hebrew",system-ui,Arial,sans-serif';
+const FONT_LAT='ui-monospace,Menlo,Consolas,monospace';
+const hasHe=s=>/[֐-׿]/.test(s);
+function setF(sz,latin){ ctx.font=latin?((10*sz)+"px "+FONT_LAT):((sz>=2?HEF:Math.round(HEF*0.8))+"px "+FONT_HE); ctx.textBaseline="top"; ctx.textAlign="left"; }
+function textW(s,sz,latin){ setF(sz,latin); ctx.direction=(!latin&&hasHe(s))?"rtl":"ltr"; const w=ctx.measureText(s).width; ctx.direction="ltr"; return w; }
+/* al: 0 left, 1 centre, 2 right (enum Align). y = top of the text, like drawString */
+function say(s,x,y,al,sz,col,latin){
+  s=String(s); setF(sz,latin); ctx.direction=(!latin&&hasHe(s))?"rtl":"ltr"; ctx.fillStyle=col;
+  const w=ctx.measureText(s).width, tx=al===0?x:al===1?x-w/2:x-w; ctx.fillText(s,tx,y); ctx.direction="ltr";
+  if(ctx===lcd.getContext("2d")&&(tx<-0.5||tx+w>W+0.5)&&s.trim()) (window.__ovf=window.__ovf||[]).push({s,tx:Math.round(tx),w:Math.round(w),W,kind:"edge"});
+  return w;
+}
+function bigNum(s,x,y,col){ ctx.font="700 46px "+FONT_LAT; ctx.textBaseline="top"; ctx.textAlign="center"; ctx.direction="ltr"; ctx.fillStyle=col; ctx.fillText(String(s),x,y); ctx.textAlign="left"; }
+/* label/value row: HE = label on the right, value on the left. Compact: an overflowing row drops to the small font. */
+function row(y,label,value,colL,colV){
+  let sz=2; const xl=L.rowMargin, xr=L.W-L.rowMargin;
+  if(L.compact&&textW(label,2)+textW(value,2)+8>xr-xl){ sz=1; y+=4; }
+  if(textW(label,sz)+textW(value,sz)+4>xr-xl) (window.__ovf=window.__ovf||[]).push({s:label+" | "+value,W:L.W,kind:"row"});
+  say(label,xr,y,2,sz,colL); say(value,xl,y,0,sz,colV);
+}
+/* word wrap of a logical string into lines that fit maxW (Hebrew font) */
+function wrapLines(text,maxW,sz){
+  const lines=[]; let line="";
+  for(const word of String(text).split(/[ \n]+/)){
+    if(!word) continue; const cand=line?line+" "+word:word;
+    if(textW(cand,sz)>maxW&&line){ lines.push(line); line=word; } else line=cand;
+  }
+  if(line) lines.push(line); return lines;
+}
+
+
+/* =====================================================================================
+   CHARACTER. Four drawings of the same face, all built from G primitives only:
+   fillRect, fillRoundRect, fillCircle, fillEllipse, fillTriangle, drawLine (+ tline/arc/curveMouth helpers = polylines of drawLine).
+   Coordinates: (cx,cy) = centre of the hero face, s = scale (1.0 = 320x240 hero, 0.75 = 240x135 hero),
+   exactly the same convention as drawFace() in face.h. Moods: neutral happy worried angry confused listen think talk sleep.
+   o = { mouth: 0..1 (talk), chef: bool (hat), open: forced eye openness }.
+   ===================================================================================== */
+const VARIANTS=[
+  {id:"bean",name:"שעועית-רובוט",sub:"ראש עגול עם אנטנה ועיניים זוהרות"},
+  {id:"pixel",name:"פיקסל רטרו",sub:"בלוקים של 8 ביט, רק fillRect"},
+  {id:"line",name:"קווית מינימליסטית",sub:"בלי ראש: עיניים וקווים"},
+  {id:"classic",name:"קלאסית",sub:"כמו שהיא בקושחה היום"}
+];
+const MOODS=[["neutral","רגוע"],["happy","שמח"],["worried","מודאג"],["angry","כועס"],["confused","מבולבל"],["listen","מקשיב"],["think","חושב"],["talk","מדבר"],["sleep","ישן"]];
+const PINK="#ff7a90", SWEAT="#6fd0ff";
+let nextBlink=2500, blinkEnd=0;
+function blinkOpen(now){ if(now>=nextBlink){ blinkEnd=now+130; nextBlink=now+2500+Math.random()*3500; } return now<blinkEnd?0.08:1; }
+
+/* parabola mouth, same as faceMouth() in face.h */
+function curveMouth(cx,cy,w,curve,th,col){
+  let px=cx-w, py=cy;
+  for(let i=1;i<=16;i++){ const t=-1+2*i/16, x=cx+t*w, y=cy+curve*(1-t*t); tline(px,py,x,y,th,col); px=x; py=y; }
+}
+function zig(cx,cy,s,th,col){ let px=cx-28*s, py=cy; for(let i=1;i<=4;i++){ const x=cx-28*s+14*s*i, y=cy+((i&1)?-6*s:6*s); tline(px,py,x,y,th,col); px=x; py=y; } }
+function zLetter(x,y,sz,th,col){ tline(x,y,x+sz,y,th,col); tline(x+sz,y,x,y+sz,th,col); tline(x,y+sz,x+sz,y+sz,th,col); }
+function sweatDrop(x,y,s){ G.fillCircle(x,y+4*s,4*s,SWEAT); G.fillTriangle(x-3.6*s,y+2*s,x+3.6*s,y+2*s,x,y-6*s,SWEAT); }
+function questionMark(x,y,s,col){ arc(x,y,7*s,190,370,Math.max(2,3*s),col); tline(x+6.9*s,y+1.2*s,x,y+9*s,Math.max(2,3*s),col); tline(x,y+9*s,x,y+13*s,Math.max(2,3*s),col); G.fillCircle(x,y+18*s,2*s,col); }
+
+/* ---------- A: bean-robot ---------- */
+function hatBean(cx,top,s,k){
+  const shade=mix(k.fg,k.bg,0.3);
+  G.fillCircle(cx-28*s,top-20*s,20*s,k.fg); G.fillCircle(cx,top-30*s,24*s,k.fg); G.fillCircle(cx+28*s,top-20*s,20*s,k.fg);
+  G.fillRoundRect(cx-46*s,top-12*s,92*s,16*s,4*s,k.fg);
+  tline(cx-14*s,top-26*s,cx-14*s,top-12*s,Math.max(1,2*s),shade); tline(cx+14*s,top-26*s,cx+14*s,top-12*s,Math.max(1,2*s),shade);
+}
+function faceBean(cx,cy,s,mood,now,k,o){
+  const chef=!!o.chef; if(chef){ s*=0.8; cy=Math.max(cy,2+96*s); }
+  const plate=mix(k.bg,k.fg,0.10), ink=k.acc, hi=k.fg, sleep=mood==="sleep";
+  const rim=sleep?mix(k.acc,k.bg,0.55):(mood==="angry"?mix(k.acc,RED,0.65):k.acc);
+  const open=o.open!==undefined?o.open:(mood==="listen"?1:blinkOpen(now));
+  const hw=88*s, hh=57*s, hcy=cy+15*s, top=hcy-hh, th=Math.max(2,Math.round(4*s));
+  G.fillRoundRect(cx-hw-8*s,hcy-16*s,11*s,32*s,5*s,rim); G.fillRoundRect(cx+hw-3*s,hcy-16*s,11*s,32*s,5*s,rim);
+  G.fillRoundRect(cx-hw,top,2*hw,2*hh,52*s,rim);
+  G.fillRoundRect(cx-hw+4*s,top+4*s,2*hw-8*s,2*hh-8*s,48*s,plate);
+  if(chef) hatBean(cx,top,s,k);
+  else{
+    const pulse=mood==="listen"?3*s*(0.5+0.5*Math.sin(now/150)):0, on=!sleep&&(mood!=="think"||((now/300|0)%2));
+    tline(cx,top,cx,top-7*s,Math.max(2,3*s),rim); G.fillCircle(cx,top-8*s,4*s+pulse,on?ink:mix(rim,k.bg,0.5));
+    if(mood==="listen") G.drawCircle(cx,top-8*s,7*s+pulse,ink);
+  }
+  const ex=48*s, ey=hcy-6*s; let rx=21*s, ry=27*s, gx=Math.sin(now/2300)*5*s, gy=Math.sin(now/3100)*2*s;
+  if(mood==="listen"){ gx=gy=0; rx*=1.15; ry*=1.15; }
+  if(mood==="think"){ gx=-9*s; gy=-9*s+Math.sin(now/500)*3*s; }
+  const ryO=Math.max(2*s,ry*open), exs=[cx-ex+gx,cx+ex+gx], eyy=ey+gy;
+  if(mood==="happy") exs.forEach(x=>arc(x,eyy+8*s,17*s,205,335,Math.max(3,5*s),ink));
+  else if(sleep) exs.forEach(x=>arc(x,eyy-4*s,16*s,25,155,th,ink));
+  else{
+    exs.forEach((x,i)=>{
+      const conf=mood==="confused"&&i===1, r2=conf?ryO*0.6:ryO, y2=conf?eyy-6*s:eyy;
+      G.fillEllipse(x,y2,rx,r2,ink);
+      if(open>0.5&&r2>8*s) G.fillCircle(x-rx*0.35,y2-r2*0.42,Math.max(2,5*s),hi);
+    });
+    if(mood==="angry"){
+      G.fillTriangle(exs[0]-rx-3,eyy-ryO-3,exs[0]+rx+3,eyy-ryO-3,exs[0]+rx+3,eyy-ryO*0.05,plate);
+      G.fillTriangle(exs[1]-rx-3,eyy-ryO-3,exs[1]+rx+3,eyy-ryO-3,exs[1]-rx-3,eyy-ryO*0.05,plate);
+    }else if(mood==="worried"){
+      G.fillTriangle(exs[0]-rx-3,eyy-ryO-3,exs[0]+rx+3,eyy-ryO-3,exs[0]-rx-3,eyy-ryO*0.05,plate);
+      G.fillTriangle(exs[1]-rx-3,eyy-ryO-3,exs[1]+rx+3,eyy-ryO-3,exs[1]+rx+3,eyy-ryO*0.05,plate);
+    }
+  }
+  const my=hcy+30*s, ink2=ink;
+  if(mood==="happy"){ curveMouth(cx,my,22*s,12*s,th,ink2); const ch=mix(plate,PINK,0.7); G.fillEllipse(cx-ex-8*s,ey+26*s,9*s,4.5*s,ch); G.fillEllipse(cx+ex+8*s,ey+26*s,9*s,4.5*s,ch); }
+  else if(mood==="worried"){ curveMouth(cx,my+5*s,16*s,-8*s,th,ink2); sweatDrop(cx+hw-16*s,top+20*s,s); }
+  else if(mood==="angry") curveMouth(cx,my+5*s,18*s,-7*s,th,ink2);
+  else if(mood==="confused"){ zig(cx,my,s*0.8,th,ink2); questionMark(cx+hw-14*s,top+20*s,s,hi); }
+  else if(mood==="listen") G.fillCircle(cx,my,6*s,ink2);
+  else if(mood==="think"){ tline(cx-8*s,my,cx+8*s,my,th,ink2); const a=((now/300)|0)%3; for(let i=0;i<3;i++) G.fillCircle(cx+hw-40*s+i*13*s,top+16*s-i*5*s,(2.5+i)*s,i===a?ink:mix(ink,plate,0.6)); }
+  else if(mood==="talk"){ const mh=Math.max(4*s,(4+(o.mouth||0)*26)*s); G.fillRoundRect(cx-18*s,my-mh/2+2*s,36*s,mh,mh/2,ink2); }
+  else if(sleep){ tline(cx-6*s,my,cx+6*s,my,th,ink2); zLetter(cx-9*s,eyy-4*s,7*s,Math.max(1,2*s),hi); zLetter(cx+3*s,eyy-16*s,9*s,Math.max(1,2*s),hi); }
+  else curveMouth(cx,my,16*s,4*s,th,ink2);
+  if(mood==="listen"){
+    [14,22].forEach(r=>{ arc(cx+hw+8*s,hcy,r*s,-45,45,Math.max(2,3*s),ink); arc(cx-hw-8*s,hcy,r*s,135,225,Math.max(2,3*s),ink); });
+  }
+}
+
+/* ---------- B: pixel retro (fillRect only) ---------- */
+function facePixel(cx,cy,s,mood,now,k,o){
+  const chef=!!o.chef, u=Math.max(3,Math.floor((chef?8:10.5)*s)), yo=chef?4:0;
+  const x0=Math.round(cx-10*u), y0=Math.round(chef?Math.max(2,cy+10*s-9*u):cy+10*s-7*u);
+  const px=(c,r,w,h,col)=>G.fillRect(x0+c*u,y0+(r+yo)*u,w*u,h*u,col);
+  const sleep=mood==="sleep", plate=mix(k.bg,k.fg,0.10), rim=sleep?mix(k.acc,k.bg,0.55):(mood==="angry"?mix(k.acc,RED,0.65):k.acc), ink=k.acc, hi=k.fg;
+  const open=o.open!==undefined?o.open:(mood==="listen"?1:blinkOpen(now));
+  [[3,0,14,1],[1,1,18,1],[0,2,20,10],[1,12,18,1],[3,13,14,1]].forEach(a=>px(a[0],a[1],a[2],a[3],rim));
+  [[4,1,12,1],[2,2,16,1],[1,3,18,8],[2,11,16,1],[4,12,12,1]].forEach(a=>px(a[0],a[1],a[2],a[3],plate));
+  if(chef){
+    const shade=mix(k.fg,k.bg,0.3);
+    px(7,-4,6,1,k.fg); px(5,-3,10,1,k.fg); px(4,-2,12,1,k.fg); px(5,-1,10,1,k.fg); px(9,-3,1,2,shade); px(12,-3,1,2,shade);
+  }
+  let gxq=mood==="listen"?0:Math.round(Math.sin(now/2300)), gyq=0;
+  if(mood==="think"){ gxq=-1; gyq=-1; }
+  const eL=5+gxq, eR=12+gxq, big=mood==="listen";
+  const eh=big?5:4, er=4+gyq;
+  const drawEye=(c,r,w,h)=>{ if(open<0.5){ px(c,r+Math.floor(h/2),w,1,ink); } else { px(c,r,w,h,ink); if(h>=3) px(c,r,1,1,hi); } };
+  if(mood==="happy"){ [eL,eR].forEach(c=>{ px(c,er+1,1,1,ink); px(c+1,er,1,1,ink); px(c+2,er+1,1,1,ink); }); }
+  else if(sleep){ [eL,eR].forEach(c=>px(c,6,3,1,ink)); }
+  else if(mood==="angry"){ drawEye(eL,5,3,3); drawEye(eR,5,3,3); [[4,3],[5,3],[6,4],[7,4]].forEach(a=>px(a[0],a[1],1,1,ink)); [[15,3],[14,3],[13,4],[12,4]].forEach(a=>px(a[0],a[1],1,1,ink)); }
+  else if(mood==="worried"){ drawEye(eL,er,3,4); drawEye(eR,er,3,4); [[4,3],[5,3],[6,2],[7,2]].forEach(a=>px(a[0],a[1],1,1,ink)); [[15,3],[14,3],[13,2],[12,2]].forEach(a=>px(a[0],a[1],1,1,ink)); px(17,3,1,2,SWEAT); }
+  else if(mood==="confused"){ drawEye(eL,er,3,4); drawEye(eR,er+2,3,2); px(12,3,3,1,ink); }
+  else{ drawEye(eL,er,3,eh); drawEye(eR,er,3,eh); }
+  if(mood==="happy"){ px(7,9,1,1,ink); px(8,10,4,1,ink); px(12,9,1,1,ink); px(4,8,1,1,mix(plate,PINK,0.7)); px(15,8,1,1,mix(plate,PINK,0.7)); }
+  else if(mood==="worried"||mood==="angry"){ px(7,10,1,1,ink); px(8,9,4,1,ink); px(12,10,1,1,ink); }
+  else if(mood==="confused"){ [[7,9],[8,10],[9,9],[10,10],[11,9],[12,10]].forEach(a=>px(a[0],a[1],1,1,ink)); }
+  else if(mood==="listen"){ px(9,9,2,2,ink); const hgt=2+((now/160|0)%3)*2; px(2,6-Math.floor(hgt/2),1,hgt,ink); px(17,6-Math.floor(hgt/2),1,hgt,ink); }
+  else if(mood==="think"){ const a=((now/300)|0)%3; [8,10,12].forEach((c,i)=>px(c,9,1,1,i===a?ink:mix(ink,plate,0.6))); }
+  else if(mood==="talk"){ const h=1+Math.round((o.mouth||0)*2); px(7,9,6,h,ink); if(h>=2) px(8,9,4,h-1,mix(k.bg,ink,0.2)); }
+  else if(sleep){ px(9,10,2,1,ink); px(15,2,2,1,hi); px(16,3,1,1,hi); px(15,4,2,1,hi); }
+  else px(8,9,4,1,ink);
+}
+
+/* ---------- C: minimal line (no head) ---------- */
+function faceLine(cx,cy,s,mood,now,k,o){
+  const chef=!!o.chef; if(chef){ s*=0.8; cy=Math.max(cy,2+68*s); }
+  const th=Math.max(2,Math.round(4*s)), sleep=mood==="sleep", ink=k.fg, ac=k.acc;
+  const open=o.open!==undefined?o.open:(mood==="listen"?1:blinkOpen(now));
+  const ex=46*s, ey=cy+5*s; let r=11*s, gx=Math.sin(now/2300)*5*s, gy=Math.sin(now/3100)*2*s;
+  if(mood==="listen"){ r*=1.25; gx=gy=0; }
+  if(mood==="think"){ gx=-8*s; gy=-8*s+Math.sin(now/500)*3*s; }
+  const xs=[cx-ex+gx,cx+ex+gx], y=ey+gy;
+  if(chef){
+    const sh=Math.max(2,3*s); arc(cx-22*s,cy-42*s,14*s,110,330,sh,k.fg); arc(cx,cy-50*s,17*s,200,340,sh,k.fg); arc(cx+22*s,cy-42*s,14*s,210,430,sh,k.fg);
+    tline(cx-30*s,cy-30*s,cx-30*s,cy-22*s,sh,k.fg); tline(cx+30*s,cy-30*s,cx+30*s,cy-22*s,sh,k.fg); tline(cx-30*s,cy-22*s,cx+30*s,cy-22*s,sh,k.fg);
+  }
+  if(mood==="happy") xs.forEach(x=>arc(x,y+10*s,16*s,205,335,th,ac));
+  else if(sleep) xs.forEach(x=>arc(x,y-6*s,14*s,25,155,th,ink));
+  else{
+    xs.forEach((x,i)=>{
+      if(open<0.5){ tline(x-r,y,x+r,y,th,ink); return; }
+      if(mood==="confused"&&i===1){ G.fillCircle(x,y,r,ink); G.fillCircle(x,y,r-Math.max(2,th*0.8),k.bg); }
+      else G.fillCircle(x,y,r,ink);
+    });
+    if(mood==="angry"){ tline(xs[0]-r-2*s,y-r-8*s,xs[0]+r+2*s,y-r-1*s,th,ac); tline(xs[1]+r+2*s,y-r-8*s,xs[1]-r-2*s,y-r-1*s,th,ac); }
+    else if(mood==="worried"){ tline(xs[0]-r-2*s,y-r-1*s,xs[0]+r+2*s,y-r-8*s,th,ac); tline(xs[1]+r+2*s,y-r-1*s,xs[1]-r-2*s,y-r-8*s,th,ac); }
+    else if(mood==="confused") tline(xs[1]-r,y-r-6*s,xs[1]+r,y-r-9*s,th,ac);
+  }
+  const my=cy+42*s;
+  if(mood==="happy") curveMouth(cx,my-4*s,24*s,12*s,th,ac);
+  else if(mood==="worried"){ curveMouth(cx,my+4*s,16*s,-8*s,th,ink); sweatDrop(cx+ex+r+8*s,y-6*s,s); }
+  else if(mood==="angry") curveMouth(cx,my+4*s,18*s,-7*s,th,ink);
+  else if(mood==="confused"){ zig(cx,my,s*0.8,th,ink); questionMark(cx+ex+r+12*s,y-r-16*s,s*0.9,ac); }
+  else if(mood==="listen"){ G.fillCircle(cx,my,6*s,ink); [26,38].forEach(rr=>{ arc(cx+ex+r+4*s,y,rr*s*0.6+r*0.5,-50,50,Math.max(2,3*s),ac); arc(cx-ex-r-4*s,y,rr*s*0.6+r*0.5,130,230,Math.max(2,3*s),ac); }); }
+  else if(mood==="think"){ const a=((now/300)|0)%3; for(let i=0;i<3;i++) G.fillCircle(cx-14*s+i*14*s,my,(3+i)*s,i===a?ac:mix(ac,k.bg,0.65)); }
+  else if(mood==="talk"){ G.fillEllipse(cx,my,22*s,Math.max(2*s,(3+(o.mouth||0)*16)*s),ink); }
+  else if(sleep){ tline(cx-6*s,my,cx+6*s,my,th,ink); zLetter(cx+ex+r+2*s,y-r-14*s,8*s,Math.max(1,2*s),ac); zLetter(cx+ex+r+14*s,y-r-26*s,10*s,Math.max(1,2*s),ac); }
+  else curveMouth(cx,my,16*s,4*s,th,ink);
+}
+
+/* ---------- D: classic (port of drawFace() in face.h; + sleep and chef) ---------- */
+function faceClassic(cx,cy,s,mood,now,k,o){
+  const chef=!!o.chef; if(chef){ s*=0.8; cy=Math.max(cy,2+94*s); }
+  const sleep=mood==="sleep", open=sleep?0.08:(mood==="listen"?1:(o.open!==undefined?o.open:blinkOpen(now)));
+  let ew=56*s, eh=76*s, gx=Math.sin(now/2300)*7*s, gy=Math.sin(now/3100)*3*s;
+  if(mood==="listen"){ ew*=1.2; eh*=1.2; gx=gy=0; }
+  if(mood==="think"){ gx=Math.cos(now/500)*10*s-8*s; gy=-10*s+Math.sin(now/500)*6*s; }
+  const h=eh*open, ex=62*s, ey=cy-12*s, lx=cx-ex-ew/2+gx, rx=cx+ex-ew/2+gx, top=ey-h/2+gy, w=ew, hh=h;
+  const hr=mood==="confused"?0.6:1, hhR=h*hr, topR=ey-hhR/2+gy;
+  const rad=Math.max(1,Math.min(ew*0.3,h*0.5)), radR=Math.max(1,Math.min(ew*0.3,hhR*0.5));
+  if(chef){
+    const bt=ey-eh/2-6*s, shade=mix(k.fg,k.bg,0.3);
+    G.fillCircle(cx-26*s,bt-18*s,18*s,k.fg); G.fillCircle(cx,bt-26*s,22*s,k.fg); G.fillCircle(cx+26*s,bt-18*s,18*s,k.fg);
+    G.fillRoundRect(cx-44*s,bt-10*s,88*s,14*s,4*s,k.fg); tline(cx-12*s,bt-24*s,cx-12*s,bt-10*s,Math.max(1,2*s),shade); tline(cx+12*s,bt-24*s,cx+12*s,bt-10*s,Math.max(1,2*s),shade);
+  }
+  G.fillRoundRect(lx,top,w,hh,rad,k.fg); G.fillRoundRect(rx,topR,w,hhR,radR,k.fg);
+  if(mood==="happy"){ G.fillRect(lx-2,top+hh*0.55,w+4,hh*0.5+2,k.bg); G.fillRect(rx-2,top+hh*0.55,w+4,hh*0.5+2,k.bg); }
+  else if(mood==="angry"){ G.fillTriangle(lx-2,top-2,lx+w+2,top-2,lx+w+2,top+hh*0.5,k.bg); G.fillTriangle(rx-2,top-2,rx+w+2,top-2,rx-2,top+hh*0.5,k.bg); }
+  else if(mood==="worried"){ G.fillTriangle(lx-2,top-2,lx+w+2,top-2,lx-2,top+hh*0.5,k.bg); G.fillTriangle(rx-2,top-2,rx+w+2,top-2,rx+w+2,top+hh*0.5,k.bg); }
+  const my=cy+62*s, th=Math.max(2,Math.round(4*s));
+  if(mood==="neutral") curveMouth(cx,my,26*s,6*s,th,k.fg);
+  else if(mood==="happy") curveMouth(cx,my,36*s,18*s,th,k.fg);
+  else if(mood==="worried") curveMouth(cx,my+8*s,24*s,-10*s,th,k.fg);
+  else if(mood==="angry") curveMouth(cx,my+8*s,30*s,-8*s,th,k.fg);
+  else if(mood==="confused") zig(cx,my,s,th,k.fg);
+  else if(mood==="talk"){ const mw=40*s, mh=Math.max(th,(4+(o.mouth||0)*30)*s); G.fillRoundRect(cx-mw/2,my-mh/2+4*s,mw,mh,Math.max(1,mh/2),k.fg); }
+  else if(mood==="listen"){ G.fillCircle(cx,my,9*s,k.fg); if(s>=0.8){ const p=Math.sin(now/150)*5; G.drawCircle(cx,cy,105*s+p,k.acc); G.drawCircle(cx,cy,106*s+p,k.acc); } }
+  else if(mood==="think"){ const a=((now/300)|0)%3; for(let i=0;i<3;i++) G.fillCircle(cx-24*s+24*s*i,my,Math.max(2,i===a?8*s:4*s),k.acc); }
+  else if(sleep){ tline(cx-12*s,my,cx+12*s,my,th,k.fg); zLetter(cx+ex+ew/2+6*s,ey-30*s,10*s,Math.max(1,2*s),k.acc); }
+}
+
+const FACE_FN={bean:faceBean,pixel:facePixel,line:faceLine,classic:faceClassic};
+let CHAR="bean";
+function drawChar(variant,cx,cy,s,mood,now,k,o){ FACE_FN[variant](cx,cy,s,mood,now,k,o||{}); }
+
+/* ---------- device face wrapper: mood-change transition (130ms blink + 10% scale pop) ---------- */
+let prevMood="neutral", moodT=-1e9;
+function devFace(cx,cy,s,mood,now,k,o){
+  o=o||{};
+  if(mood!==prevMood){ prevMood=mood; moodT=now; }
+  const t=now-moodT;
+  if(t<260){ s*=1+0.10*Math.sin(Math.PI*t/260); if(t<130&&o.open===undefined&&mood!=="listen"&&mood!=="sleep") o={...o,open:0.08}; }
+  if(S.chefOn&&SH.on) o={...o,chef:true};
+  drawChar(CHAR,cx,cy,s,mood,now,k,o);
+}
+
+
+/* =====================================================================================
+   DEVICE STATE (mirrors main.cpp: St enum, Settings, Screen enum)
+   ===================================================================================== */
+const BRIGHT_LV=[64,160,255], VOL_LV=[0,64,128,200,255], SENS_DB=[15,12,9];
+const SCREEN_NAMES={FACE:"פרצוף",NOISE:"רעש בתא",G:"כוחות G",TRIP:"נסיעה",SHIFT:"משמרת",PEER:"מכשיר כיס",SET:"הגדרות"};
+const screensFor=()=>BOARD.touch?["FACE","NOISE","G","TRIP","SHIFT","PEER","SET"]:["FACE","NOISE","G","TRIP","SHIFT","SET"];
+const S={
+  st:"IDLE", stSince:0, screen:"FACE", setSel:0, lastActivity:0, lastBtn:0, resetArmedAt:0,
+  cfg:{bright:1,vol:2,sens:1,theme:0,voice:true,recipe:false},
+  fwA2dp:true, chefOn:true,
+  a2dp:"off", a2dpAt:0, a2dpEnd:0,
+  level:50, floor:50, thr:62, burstActive:false, burstStart:0, burstBad:false, bursts:[], refr:0,
+  micOn:false, shoutUntil:0,
+  recStart:0, speechSeen:false, lastSpeech:0, speechUntil:0, phrase:"", wave:new Array(64).fill(0), waveAcc:0,
+  pttHeld:false, pttUpSince:0, askRecipes:false,
+  reply:"", replyLines:[], replySince:0, replyHold:8000, replyMood:"happy", speaking:false, speakUntil:0, mouth:0, thinkDur:1500, thinkFor:"voice",
+  errText:"", errInfo:false, brakeFlashUntil:0,
+  speed:50, sax:0, say:0, impAx:0, impAy:0, impUntil:0, padAx:0, padAy:0, ax:0, ay:0,
+  brakeLock:false, turnLock:false, crashT:0, crash:null, crashAlertSent:false,
+  trip:{secs:0,brakes:0,turns:0,maxG:0,noiseSum:0,noiseN:0}, hist:new Array(60).fill(0), histAcc:0, histSum:0, quietStreak:0, bestQuiet:0,
+  trail:[], trailAcc:0, samples:[], sampleAcc:0,
+  sqMode:"CONFIRM", sqQ:[], sqIdx:0, sqFollow:false, noteReturn:"IDLE", confirmSince:0, swaitSince:0,
+  palertG:-1, findUntil:0, palertUntil:0,
+  testRunning:false, testT0:0, testRes:"", btPicking:false, pickSel:0,
+  hub:{valid:true,battery:76,notes:2,shiftActive:true,inCar:false,age:20}
+};
+const SH={on:false,finishing:false,startedAt:0,startDate:null,notes:[],noteRec:false,noteStart:0,levels:[],lvAcc:0,
+  summaryReady:false,lastSummary:null,result:null,round:0,rec:null,seq:0,vib:0,batt:87,offset:0,endElapsed:0,uiAcc:0,lowWarned:false,touchLog:0,writeErr:false};
+let micStreamRef=null;
+const accent=()=>THEMES[S.cfg.theme].acc;
 const driving=()=>S.speed>5;
+const shiftPocket=now=>SH.on&&!S.crash&&S.st!=="PALERT"&&S.st!=="FIND"&&now-S.lastActivity>10000;
+const setItems=()=>7+(S.fwA2dp?1:0);
+const pad2=n=>String(n).padStart(2,"0");
+const fmtHMS=s=>{ s=Math.floor(s); return pad2(Math.floor(s/3600))+":"+pad2(Math.floor(s/60)%60)+":"+pad2(s%60); };
+const fmtMS=s=>pad2(Math.floor(s/60))+":"+pad2(Math.floor(s)%60);
+const shiftElapsed=now=>Math.max(0,now-SH.startedAt)+SH.offset;
 
 /* ---------- log ---------- */
 const logEl=$("log");
 function log(msg,cls){
-  const d=document.createElement("div");
-  const t=(performance.now()/1000).toFixed(1).padStart(6," ");
-  d.innerHTML='<span class="t">['+t+'s]</span> <span class="'+(cls||"")+'"></span>';
-  d.lastChild.textContent=msg;
-  logEl.appendChild(d);
-  while(logEl.childNodes.length>120) logEl.removeChild(logEl.firstChild);
-  logEl.scrollTop=logEl.scrollHeight;
+  const d=document.createElement("div"), t=(performance.now()/1000).toFixed(1).padStart(6," ");
+  d.innerHTML='<span class="t">['+t+'s]</span> <span class="'+(cls||"")+'"></span>'; d.lastChild.textContent=msg;
+  logEl.appendChild(d); while(logEl.childNodes.length>140) logEl.removeChild(logEl.firstChild); logEl.scrollTop=logEl.scrollHeight;
 }
 
 /* ---------- sound ---------- */
 let actx=null;
 function audioCtx(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
-function beep(f,d,v){
-  if(S.set.vol===0) return;
+function beep(f,d,v,force){
+  if(S.cfg.vol===0&&!force) return;
   const a=audioCtx(); if(!a) return; if(a.state==="suspended") a.resume();
   try{
     const o=a.createOscillator(), g=a.createGain();
-    /* Plus2 has a buzzer only: harsher square wave, quieter */
-    o.type=BOARD.speaker?"sine":"square"; o.frequency.value=f; g.gain.value=(v||0.05)*S.set.vol/2*(BOARD.speaker?1:0.45);
+    o.type=BOARD.speaker?"sine":"square"; o.frequency.value=f; g.gain.value=(v||0.05)*(force?2:S.cfg.vol/2)*(BOARD.speaker?1:0.45);
     o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+d/1000);
   }catch(e){}
 }
-/* Plus2: speech goes out to the car kit over A2DP. WebAudio babble stands in for the TTS voice. */
-function speakCar(ms){
-  if(S.set.vol===0) return;
-  const a=audioCtx(); if(!a) return; if(a.state==="suspended") a.resume();
+function speakKit(ms){
+  if(S.cfg.vol===0) return; const a=audioCtx(); if(!a) return; if(a.state==="suspended") a.resume();
   try{
     const lp=a.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=1800;
-    const g=a.createGain(); g.gain.value=0.05*S.set.vol/2; lp.connect(g); g.connect(a.destination);
+    const g=a.createGain(); g.gain.value=0.05*S.cfg.vol/2; lp.connect(g); g.connect(a.destination);
     let t=a.currentTime+0.02; const end=t+ms/1000;
-    while(t<end){
-      const o=a.createOscillator(); o.type="triangle"; o.frequency.value=150+Math.random()*170;
-      const d=0.07+Math.random()*0.07; o.connect(lp); o.start(t); o.stop(t+d); t+=d+(Math.random()<0.2?0.12:0.015);
-    }
+    while(t<end){ const o=a.createOscillator(); o.type="triangle"; o.frequency.value=150+Math.random()*170; const d=0.07+Math.random()*0.07; o.connect(lp); o.start(t); o.stop(t+d); t+=d+(Math.random()<0.2?0.12:0.015); }
   }catch(e){}
 }
+function speakText(t){
+  if(!("speechSynthesis" in window)) return false;
+  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); u.lang="he-IL"; const v=(speechSynthesis.getVoices()||[]).find(x=>/^he/i.test(x.lang)); if(v) u.voice=v; speechSynthesis.speak(u); return true; }catch(e){ return false; }
+}
+function stopSpeechAudio(){ try{ if("speechSynthesis" in window) speechSynthesis.cancel(); }catch(e){} }
 function setAudioPill(){
   const el=$("pAudio"); if(!el) return;
-  const kit=!BOARD.speaker;
-  el.className="pill"+(kit&&S.a2dp==="streaming"?" on":"");
-  el.lastChild.textContent=kit?"שמע: דיבורית רכב (A2DP)"+(S.a2dp==="connecting"?" · מתחבר…":S.a2dp==="streaming"?" · משדר":""):"שמע: רמקול Core2";
+  const kit=S.a2dp!=="off";
+  el.className="pill"+(S.a2dp==="streaming"?" on":"");
+  const base=!BOARD.speaker?(S.fwA2dp?"דיבורית רכב (A2DP)":"זמזם בלבד, בלי דיבור"):(S.fwA2dp?"דיבורית רכב, ואם אין חיבור הרמקול":"רמקול Core2");
+  el.lastChild.textContent="שמע: "+base+(S.a2dp==="connecting"?" · מתחבר…":S.a2dp==="streaming"?" · משדר":"");
+}
+
+/* vibration / buzzer feedback: patterns 's' short 'l' long '.' pause (same as haptic() in main.cpp) */
+function haptic(pat){
+  const seq=[]; for(const c of pat){ if(c==="s") seq.push(90); else if(c==="l") seq.push(320); else seq.push(0); }
+  SH.vib++;
+  const dv=$("device");
+  if(BOARD.id==="core2"){
+    dv.classList.remove("shake"); void dv.offsetWidth; dv.classList.add("shake"); setTimeout(()=>dv.classList.remove("shake"),420);
+    try{ if(navigator.vibrate) navigator.vibrate(seq.map(x=>x||120)); }catch(e){}
+    log("רטט ["+pat+"]","i");
+  }else{
+    let t=0; seq.forEach(x=>{ setTimeout(()=>beep(x>100?1500:2200,x>100?260:70,0.06,true),t); t+=(x||120)+120; });
+    log("אין מנוע רטט ב-PLUS2: צפצופים ["+pat+"]","i");
+  }
+  const p=$("shPillVib"); if(p){ p.classList.add("on"); setTimeout(()=>p.classList.remove("on"),450); p.lastChild.textContent="רטט: "+SH.vib; }
 }
 
 /* ---------- microphone ---------- */
@@ -464,31 +1010,25 @@ async function enableMic(){
 function sampleLevel(now,dt){
   let target;
   if(S.micOn&&analyser){
-    analyser.getFloatTimeDomainData(abuf);
-    let s=0; for(let i=0;i<abuf.length;i++) s+=abuf[i]*abuf[i];
-    const rms=Math.sqrt(s/abuf.length);
-    target=clamp(20*Math.log10(rms+1e-6)+100,30,110);
+    analyser.getFloatTimeDomainData(abuf); let s=0; for(let i=0;i<abuf.length;i++) s+=abuf[i]*abuf[i];
+    target=clamp(20*Math.log10(Math.sqrt(s/abuf.length)+1e-6)+100,30,110);
   }else{
-    const base=+$("noise").value;
-    target=base+(Math.random()-0.5)*3+Math.sin(now/700)*1.2;
+    const base=+$("noise").value; target=base+(Math.random()-0.5)*3+Math.sin(now/700)*1.2;
     if(now<S.shoutUntil) target=Math.max(target,S.floor+24+Math.random()*3);
-    if(S.state==="RECORD"&&now<S.speechUntil) target=Math.max(target,base+16+Math.random()*6);
+    if(S.st==="RECORD"&&(S.pttHeld||now<S.speechUntil)) target=Math.max(target,base+16+Math.random()*6);
     if(SH.noteRec) target=Math.max(target,base+14+Math.random()*8+Math.sin(now/130)*3);
   }
-  const k=target>S.level?0.55:0.18;
-  S.level+= (target-S.level)*k;
+  S.level+=(target-S.level)*(target>S.level?0.55:0.18);
 }
 
-/* ---------- trigger (same algorithm as firmware) ---------- */
-function threshold(){ return S.floor+SENS[S.set.sens][1]+(driving()?4:0); }
+/* ---------- double-shout trigger: same algorithm as trigger.h ---------- */
+const threshold=()=>S.floor+SENS_DB[S.cfg.sens]+(driving()?4:0);
 function updateTrigger(now,dt){
-  S.thr=threshold();
-  const above=S.level>S.thr;
-  if(S.state==="IDLE"||S.state==="ERROR"){
-    if(!above&&!S.burstActive){ S.floor+=(S.level-S.floor)*(1-Math.exp(-dt/3000)); }
-    else{ S.floor+=(S.level-S.floor)*(1-Math.exp(-dt/30000)); }
+  S.thr=threshold(); const above=S.level>S.thr;
+  if(S.st==="IDLE"||S.st==="ERROR"){
+    if(!above&&!S.burstActive) S.floor+=(S.level-S.floor)*(1-Math.exp(-dt/3000)); else S.floor+=(S.level-S.floor)*(1-Math.exp(-dt/30000));
   }
-  if(S.state!=="IDLE"||!S.set.wake||SH.on||now<S.refr){ S.burstActive=false; return; }
+  if(S.st!=="IDLE"||!S.cfg.voice||SH.on||now<S.refr||S.crash){ S.burstActive=false; return; }
   if(above&&!S.burstActive){ S.burstActive=true; S.burstStart=now; S.burstBad=false; }
   if(S.burstActive){
     if(now-S.burstStart>700) S.burstBad=true;
@@ -499,20 +1039,60 @@ function updateTrigger(now,dt){
     }
   }
   S.bursts=S.bursts.filter(t=>now-t<1400);
-  if(S.bursts.length>=2){ log("קריאה כפולה זוהתה","g"); wake("voice",now); }
+  if(S.bursts.length>=2){ log("קריאה כפולה זוהתה","g"); S.bursts=[]; S.burstActive=false; startListen(now); }
 }
 
-/* ---------- state machine ---------- */
-function setState(s,now){ S.state=s; S.stateT=now; $("pState").lastChild.textContent=s;
-  $("pState").className="pill"+(s==="RECORD"?" rec":s!=="IDLE"?" on":""); log("מצב → "+s,"s"); }
-const SAMPLES=["מה מזג האוויר מחר?","נווט הביתה","שים מוזיקה","מה השעה?","אני עייף","כמה דלק נשאר?","התקשר לאמא"];
-function wake(src,now){
-  if(S.state!=="IDLE"||SH.on) return;
-  S.bursts=[]; S.burstActive=false; S.refr=now+3000+400; S.lastTouch=now;
-  beep(880,90); log("הפעלה ("+src+")","s"); setState("LISTEN",now);
+/* =====================================================================================
+   STATE MACHINE (main.cpp: setSt / toIdle / toError / startListen / startRecord / startPtt / startNet / startReply)
+   ===================================================================================== */
+function setSt(s,now){
+  S.st=s; S.stSince=now;
+  const pill=$("pState"); pill.lastChild.textContent=s;
+  pill.className="pill"+(s==="RECORD"||s==="NOTE"?" rec":s!=="IDLE"?" on":"");
+  log("מצב → "+s,"s");
 }
+function stopPlayback(){ stopSpeechAudio(); S.speaking=false; S.mouth=0; if(S.a2dp!=="off"){ S.a2dp="off"; setAudioPill(); } }
+function toIdle(now){ stopPlayback(); S.pttHeld=false; S.refr=now+1200; setSt("IDLE",now); S.lastActivity=now; }
+function toError(id,now){ S.errText=T[id]; S.errInfo=false; stopPlayback(); setSt("ERROR",now); beep(220,220); log("שגיאה: "+T[id],"e"); }
+function toInfo(id,now){ S.errText=T[id]; S.errInfo=true; stopPlayback(); setSt("ERROR",now); log("הודעה: "+T[id],"i"); }
+function startListen(now){
+  S.lastActivity=now; S.askRecipes=S.cfg.recipe; beep(1400,50); S.refr=now+3000; setSt("LISTEN",now);
+}
+function startRecord(now){
+  S.wave.fill(0); S.waveAcc=0; S.speechSeen=false; S.recStart=now; S.lastSpeech=now;
+  const said=$("said").value.trim()||SAMPLES[Math.floor(Math.random()*SAMPLES.length)];
+  S.phrase=S.askRecipes?($("rcpQ").value.trim()||"באיזו טמפרטורה אופים את הלזניה?"):said;
+  S.speechUntil=now+600+Math.min(2500,S.phrase.length*90);
+  setSt("RECORD",now);
+}
+function startPtt(now){
+  S.lastActivity=now; S.askRecipes=true; S.pttHeld=true; S.pttUpSince=0; S.refr=now+3000;
+  if(BOARD.id==="core2"){ try{ if(navigator.vibrate) navigator.vibrate(70); }catch(e){} }
+  log("PTT: החזק כדי לשאול את ספר המתכונים","s"); startRecord(now);
+}
+function startNet(now){
+  S.thinkFor=S.askRecipes?"recipes":"voice"; S.thinkDur=1200+Math.random()*800; S.pttHeld=false;
+  log("bridge ← POST /voice (WAV "+(((now-S.recStart)/1000)*32).toFixed(0)+" KB)"+(S.askRecipes?" · X-Mode: recipes":""),"i"); setSt("THINK",now);
+}
+const BOOK=[
+  {k:/לזניה|לזניות/,name:"לזניה בולונז",temp:"180 מעלות",time:"35 דקות",ingr:"דפי לזניה, בולונז, בשמל, גבינה צהובה, פרמזן",yield:"תבנית של 24 מנות",all:"גלוטן, חלב, ביצים"},
+  {k:/ניוקי/,name:"ניוקי תפוח אדמה",temp:"מים רותחים",time:"שתי דקות אחרי שהם צפים",ingr:"תפוח אדמה, קמח, ביצה, מלח",yield:"20 מנות",all:"גלוטן, ביצים"},
+  {k:/פוקאצ/,name:"פוקאצ'ה",temp:"230 מעלות",time:"18 דקות",ingr:"קמח, שמרים, שמן זית, מלח גס, רוזמרין",yield:"שתי תבניות",all:"גלוטן"},
+  {k:/פנקוטה/,name:"פנקוטה וניל",temp:"בלי אפייה, קירור",time:"שש שעות במקרר",ingr:"שמנת מתוקה, סוכר, ג'לטין, וניל",yield:"12 מנות",all:"חלב"}
+];
+function recipeBookReply(q){
+  const r=BOOK.find(b=>b.k.test(q));
+  if(!r) return "לא מופיע בספר.";
+  if(/אלרג|גלוטן|חלב|ביצ/.test(q)) return "אלרגנים לפי הגיליון: "+r.all+". יש לוודא בפועל.";
+  if(/מצרכ|רכיב|מה צריך|מה יש/.test(q)) return r.name+": "+r.ingr+".";
+  if(/טמפרטור|מעלות|בכמה/.test(q)) return r.name+": "+r.temp+", "+r.time+".";
+  if(/זמן|דקות|כמה זמן|שעות/.test(q)) return r.name+": "+r.time+" ("+r.temp+").";
+  if(/תפוק|כמה מנות|יוצא/.test(q)) return r.name+": "+r.yield+".";
+  return r.name+": "+r.temp+", "+r.time+". "+r.yield+".";
+}
+const RCP_MAP={pending:"S_RCP_WAIT",blocked:"S_RCP_BLOCKED",unknown:"S_RCP_SETUP",unconfigured:"S_RCP_SETUP",error:"S_RCP_DOWN"};
 function bridgeReply(text){
-  const t=new Date(), hhmm=t.toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit"});
+  const hhmm=new Date().toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit"});
   const R=[
     [/מזג|גשם|חם|קר|שמש/,"בחוץ 24 מעלות ובהיר. בלי גשם בדרך.","face:happy"],
     [/נווט|הביתה|ניווט|וויז|דרך/,"מחשב מסלול הביתה. 18 דקות, פקק קל בכניסה לעיר.",null],
@@ -522,445 +1102,139 @@ function bridgeReply(text){
     [/דלק|תדלוק|טנק/,"נשאר בערך רבע מיכל. תחנת דלק בעוד 3 ק״מ.",null],
     [/התקשר|צלצל|אמא|אבא/,"מחייג. תגיד 'נתק' כדי לסיים.","beep"]
   ];
-  for(const r of R) if(r[0].test(text)) return {text,reply:r[1],action:r[2],audio_b64:null};
-  return {text,reply:"שמעתי: «"+text+"». עוד לא למדתי את זה.",action:null,audio_b64:null};
+  for(const r of R) if(r[0].test(text)) return {text,reply:r[1],action:r[2]};
+  return {text,reply:"שמעתי: «"+text+"». עוד לא למדתי את זה.",action:null};
 }
-function updateFSM(now){
-  const el=now-S.stateT;
-  if(S.state==="LISTEN"&&el>400){
-    S.phrase=$("said").value.trim()||SAMPLES[Math.floor(Math.random()*SAMPLES.length)];
-    S.recStart=now; S.speechHeard=false; S.lastSpeech=now; S.recLevels=[];
-    S.speechUntil=now+600+Math.min(2500,S.phrase.length*90);
-    setState("RECORD",now);
-  }else if(S.state==="RECORD"){
-    if(!S.micOn||true){ /* VAD works the same for mic or sim */ }
-    if(S.level>S.floor+8){ S.speechHeard=true; S.lastSpeech=now; }
-    S.recSample=(S.recSample||0)+1; if(S.recSample%2===0){ S.recLevels.push(S.level); if(S.recLevels.length>64) S.recLevels.shift(); }
-    if(S.speechHeard&&now-S.lastSpeech>900){ log("VAD: 900ms שקט, סוף הקלטה","i"); startThink(now); }
-    else if(el>6000){ log("הקלטה הגיעה ל-6 שניות","i"); startThink(now); }
-    else if(!S.speechHeard&&el>3000){ fail("Didn't catch that",now); }
-  }else if(S.state==="THINK"){
-    if(el>S.thinkDur){
-      const net=$("netSel").value;
-      if(net==="nowifi") fail("No Wi-Fi",now);
-      else if(net==="nobridge") fail("No bridge",now);
-      else{
-        const j=bridgeReply(S.phrase); S.reply=j.reply;
-        $("json").textContent=JSON.stringify({text:j.text,reply:j.reply,action:j.action,audio_b64:j.audio_b64},null,1);
-        log("bridge ← POST /voice (WAV "+(((now-S.recStart)/1000)*32).toFixed(0)+" KB)","i");
-        if(j.action==="beep") beep(1320,120);
-        if(j.action&&j.action.startsWith("face:")){ S.mood=j.action.slice(5); S.moodUntil=now+8000; }
-        beep(1175,80);
-        setState("REPLY",now);
-        if(!BOARD.speaker){
-          S.a2dp="connecting"; S.a2dpAt=now+900; S.a2dpEnd=now+900+clamp(S.reply.length*60,1500,7000);
-          log("A2DP: מתחבר לדיבורית הרכב…","i"); setAudioPill();
-        }
-      }
+function finishThink(now){
+  const net=$("netSel").value;
+  if(net==="nowifi"){ toError("S_ERR_NOWIFI",now); return; }
+  if(net==="nobridge"){ toError("S_ERR_NOBRIDGE",now); return; }
+  if(S.thinkFor==="summary"){ startReply(now,SH.lastSummary.spoken,"face:happy",true); return; }
+  let j;
+  if(S.thinkFor==="recipes"){
+    const st=$("rcpMode").value;
+    if(st!=="ok"){
+      j={text:S.phrase,reply:"(הספר לא מוכן)",action:null,audio_url:null,status:st};
+      $("rcpJson").textContent=JSON.stringify(j,null,1);
+      toInfo(RCP_MAP[st],now); return;
     }
-  }else if(S.state==="REPLY"&&el>8000){ setState("IDLE",now); }
-  else if(S.state==="ERROR"&&el>3000){ setState("IDLE",now); }
+    const rep=recipeBookReply(S.phrase);
+    j={text:S.phrase,reply:rep,action:"face:happy",audio_url:"http://bridge.local:8787/audio/demo.wav"};
+    $("rcpJson").textContent=JSON.stringify(j,null,1);
+    startReply(now,rep,"face:happy",true); return;
+  }
+  j=bridgeReply(S.phrase); $("json").textContent=JSON.stringify({text:j.text,reply:j.reply,action:j.action,audio_url:"http://bridge.local:8787/audio/demo.wav"},null,1);
+  if(j.action==="beep") beep(1800,120);
+  startReply(now,j.reply,j.action,false);
+}
+function startReply(now,text,action,longText){
+  S.replyMood=action==="face:angry"?"angry":action==="face:confused"?"confused":action==="face:worried"?"worried":"happy";
+  if(!text) text=T.S_NOREPLY;
+  S.reply=text; S.replyLines=wrapLines(text,L.wrapW,2); S.replySince=now; S.replyHold=8000;
+  const lh=L.replyLineHe, vis=Math.floor((L.replyBottom-L.replyTextY)/lh);
+  if(longText){ const extra=S.replyLines.length-vis; if(extra>0) S.replyHold=8000+extra*1800; }
+  beep(1175,80);
+  /* audio: the firmware plays the downloaded WAV on the A2DP kit first, then the internal speaker; the buzzer-only Plus2 needs the kit */
+  const canKit=S.fwA2dp&&kitResult()==="ok", canSpk=BOARD.speaker;
+  const ms=clamp(text.length*62,1500,12000);
+  if(canKit){ S.a2dp="connecting"; S.a2dpAt=now+900; S.a2dpEnd=now+900+ms; setAudioPill(); log("A2DP: מתחבר לדיבורית הרכב…","i"); S.speaking=true; S.speakUntil=now+900+ms; }
+  else if(canSpk&&S.cfg.vol>0){ S.speaking=true; S.speakUntil=now+ms; speakText(text); }
+  else{ S.speaking=false; if(!canSpk) log("אין רמקול ואין A2DP: התשובה מוצגת כטקסט בלבד","t"); }
+  setSt("REPLY",now);
 }
 function updateA2DP(now){
-  if(BOARD.speaker||S.a2dp==="off") return;
-  if(S.a2dp==="connecting"&&now>=S.a2dpAt){
-    S.a2dp="streaming"; log("A2DP: מחובר, משדר "+((S.a2dpEnd-S.a2dpAt)/1000).toFixed(1)+" שנ׳ לדיבורית","g"); speakCar(S.a2dpEnd-S.a2dpAt); setAudioPill();
-  }else if(S.a2dp==="streaming"&&now>=S.a2dpEnd){
-    S.a2dp="off"; log("A2DP: מנותק, הדיבורית פנויה לטלפון","i"); setAudioPill();
+  if(S.a2dp==="connecting"&&now>=S.a2dpAt){ S.a2dp="streaming"; log("A2DP: מחובר, משדר לדיבורית","g"); speakKit(S.a2dpEnd-S.a2dpAt); speakText(S.reply); setAudioPill(); }
+  else if(S.a2dp==="streaming"&&now>=S.a2dpEnd){ S.a2dp="off"; log("A2DP: מנותק, הדיבורית פנויה לטלפון","i"); setAudioPill(); }
+}
+function updateFSM(now,dt){
+  const el=now-S.stSince;
+  switch(S.st){
+    case "LISTEN": if(el>400) startRecord(now); break;
+    case "RECORD": {
+      S.waveAcc+=dt;
+      if(S.waveAcc>=60){ S.waveAcc=0; S.wave.shift(); S.wave.push(clamp((S.level-S.floor)/30,0,1)); }
+      const recMs=now-S.recStart;
+      if(S.pttHeld){
+        if(S.pttUpSince&&now-S.pttUpSince>=120){ S.pttHeld=false; if(recMs>=400) startNet(now); else toIdle(now); }
+        else if(recMs>=6000){ log("הקלטה הגיעה ל-6 שניות","i"); startNet(now); }
+        break;
+      }
+      if(S.level>S.floor+8){ S.speechSeen=true; S.lastSpeech=now; }
+      if(S.speechSeen&&now-S.lastSpeech>900){ log("VAD: 900ms שקט, סוף הקלטה","i"); startNet(now); }
+      else if(recMs>6000){ log("הקלטה הגיעה ל-6 שניות","i"); startNet(now); }
+      else if(!S.speechSeen&&recMs>3000) toError("S_ERR_NOCATCH",now);
+      break;
+    }
+    case "THINK": if(el>S.thinkDur) finishThink(now); break;
+    case "REPLY":
+      if(S.speaking){
+        if(now>=S.speakUntil){ S.speaking=false; S.mouth=0; }
+        else{ const target=clamp(0.5+0.5*Math.sin(now/95)*Math.sin(now/370+1)+0.15*Math.sin(now/41),0,1); S.mouth+=(target-S.mouth)*0.5; }
+      }else{ S.mouth=0; if(el>=S.replyHold) toIdle(now); }
+      break;
+    case "ERROR": if(el>=3000) toIdle(now); break;
+    case "PALERT": if(now>S.palertUntil) toIdle(now); else hubPulse(now,false); break;
+    case "FIND": if(now>S.findUntil) toIdle(now); else hubPulse(now,true); break;
+    default: break;
+  }
+  updateA2DP(now);
+  /* test kit (Settings > Test kit): runs ~2.5 s, result from the kit panel */
+  if(S.testRunning&&now-S.testT0>2500){
+    S.testRunning=false; S.testRes=kitResult();
+    log("Test kit: "+({ok:"connected",nf:"not found",to:"timeout",mem:"low memory",fail:"failed"}[S.testRes]),S.testRes==="ok"?"g":"e");
+    if(S.testRes==="ok") speakKit(900);
+    if(S.testRes==="nf"&&S.screen==="SET"){ S.btPicking=true; S.pickSel=0; }
   }
 }
-function startThink(now){ S.thinkDur=1200+Math.random()*800; setState("THINK",now); }
-function fail(msg,now){ S.errMsg=msg; beep(220,220); log("שגיאה: "+msg,"e"); setState("ERROR",now); S.refr=now+2000; }
+const kitResult=()=>(S.testPicked?"ok":$("kitRes").value);
+let hubPulseAt=0;
+function hubPulse(now,find){
+  if(now-hubPulseAt<(find?900:450)) return; hubPulseAt=now;
+  if(BOARD.id==="core2"){ try{ if(navigator.vibrate) navigator.vibrate(find?250:350); }catch(e){} const dv=$("device"); dv.classList.remove("shake"); void dv.offsetWidth; dv.classList.add("shake"); }
+  beep(find?2000:2600,find?200:260,0.06,true);
+}
 
-/* ---------- IMU ---------- */
+/* ---------- IMU, crash, hard brake / sharp turn ---------- */
 function updateIMU(now,dt){
   let ax=S.sax+S.padAx, ay=S.say+S.padAy;
   if(now<S.impUntil){ ax+=S.impAx; ay+=S.impAy; }
-  const mag=Math.hypot(ax,ay);
-  S.ax+=(ax-S.ax)*0.35; S.ay+=(ay-S.ay)*0.35;
-  const gm=Math.hypot(S.ax,S.ay);
-  if(gm>S.gmax) S.gmax=gm;
-  if(gm>S.trip.gmax) S.trip.gmax=gm;
-  // crash
+  const mag=Math.hypot(ax,ay); S.ax+=(ax-S.ax)*0.35; S.ay+=(ay-S.ay)*0.35;
+  const gm=Math.hypot(S.ax,S.ay); if(gm>S.trip.maxG) S.trip.maxG=gm;
   if(!S.crash){
     if(mag>4) S.crashT+=dt; else S.crashT=0;
-    if(S.crashT>=30){ S.crash={t0:now}; S.crashT=0; log("IMPACT: "+mag.toFixed(1)+"g, ספירה לאחור 15 שניות","e"); beep(1500,300,0.1); }
+    const pocketNoCrash=BOARD.role==="pocket"&&SH.on;   /* HUB_POCKET_NO_CRASH */
+    if(S.crashT>=30&&!pocketNoCrash){ S.crash={t0:now}; S.crashT=0; S.crashAlertSent=false; S.lastActivity=now; log("IMPACT: "+mag.toFixed(1)+"g, ספירה לאחור 15 שניות","e"); beep(1500,300,0.1,true); }
   }
-  // hard brake / sharp turn (counted only when driving)
-  if(S.ay<-0.45&&!S.brakeLock){ S.brakeLock=true; if(driving()&&!S.crash){ S.trip.brakes++; log("בלימה חדה "+S.ay.toFixed(2)+"g (סה״כ "+S.trip.brakes+")","i"); } }
+  if(S.ay<-0.45&&!S.brakeLock){ S.brakeLock=true; if(driving()&&!S.crash){ S.trip.brakes++; S.brakeFlashUntil=now+1500; log("בלימה חדה "+S.ay.toFixed(2)+"g (סה״כ "+S.trip.brakes+")","i"); } }
   if(S.ay>-0.3) S.brakeLock=false;
   if(Math.abs(S.ax)>0.45&&!S.turnLock){ S.turnLock=true; if(driving()&&!S.crash){ S.trip.turns++; log("פנייה חדה "+S.ax.toFixed(2)+"g (סה״כ "+S.trip.turns+")","i"); } }
   if(Math.abs(S.ax)<0.3) S.turnLock=false;
   if(S.crash){
     const left=15-(now-S.crash.t0)/1000;
-    if(left<=0&&!S.crash.sos){ S.crash.sos=true; log("SOS – call emergency","e"); beep(2000,500,0.1); }
-    else if(!S.crash.sos&&Math.floor(left)!==S.crash.last){ S.crash.last=Math.floor(left); beep(1000,60,0.05); }
+    if(left<=0&&!S.crash.sos){ S.crash.sos=true; log("SOS: קרא לעזרה","e"); beep(2200,300,0.1,true); if(BOARD.role==="car"&&!S.crashAlertSent){ S.crashAlertSent=true; log("Hub: POST /hub/alert (כשאיש לא ענה 'הכול בסדר?') → רטט במכשיר הכיס","i"); } }
+    else if(!S.crash.sos&&Math.floor(left)!==S.crash.last){ S.crash.last=Math.floor(left); beep(1500,80,0.05,true); }
   }
+  S.trailAcc+=dt; if(S.trailAcc>=100){ S.trailAcc=0; S.trail.push([S.ax,S.ay]); if(S.trail.length>24) S.trail.shift(); }
 }
 function impulse(ax,ay,ms){ S.impAx=ax; S.impAy=ay; S.impUntil=performance.now()+ms; }
+function cancelCrash(now){ log("ביטול התראת תאונה: אני בסדר","g"); S.crash=null; S.refr=now+8000; toIdle(now); beep(660,100); }
 
-/* ---------- stats ---------- */
+/* ---------- once-per-second stats ---------- */
 function updateStats(now,dt){
-  S.histAcc+=dt; S.histN+=S.level*dt;
-  if(S.histAcc>=1000){ S.hist.push(S.histN/S.histAcc); if(S.hist.length>60) S.hist.shift(); S.histAcc=0; S.histN=0;
-    if(S.level<60){ S.quietSec++; if(S.quietSec>S.bestQuiet) S.bestQuiet=S.quietSec; } else S.quietSec=0; }
-  if(driving()){ S.trip.time+=dt/1000; S.trip.dist+=S.speed*dt/3600000; S.trip.noiseSum+=S.level*dt; S.trip.noiseN+=dt; }
+  S.histAcc+=dt; S.histSum+=S.level*dt;
+  if(S.histAcc>=1000){
+    const avg=S.histSum/S.histAcc; S.hist.shift(); S.hist.push(avg); S.histAcc=0; S.histSum=0;
+    S.trip.secs++; S.trip.noiseSum+=avg; S.trip.noiseN++;
+    if(avg<60){ S.quietStreak++; if(S.quietStreak>S.bestQuiet) S.bestQuiet=S.quietStreak; } else S.quietStreak=0;
+  }
   S.sampleAcc+=dt; if(S.sampleAcc>=50){ S.sampleAcc=0; S.samples.push([S.level,S.floor,S.thr]); if(S.samples.length>200) S.samples.shift(); }
-  S.saveAcc=(S.saveAcc||0)+dt; if(S.saveAcc>30000){ S.saveAcc=0; try{ localStorage.setItem("dashie.trip",JSON.stringify(S.trip)); }catch(e){} }
+  S.saveAcc=(S.saveAcc||0)+dt; if(S.saveAcc>30000){ S.saveAcc=0; try{ localStorage.setItem("dashie.trip2",JSON.stringify(S.trip)); }catch(e){} }
 }
 
-/* ---------- buttons ---------- */
-function goScreen(n,now){ S.screen=n; $("pScreen").textContent="מסך: "+SCREENS[S.screen]; beep(740,40); log("מסך → "+SCREENS[S.screen],"s"); }
-function secondaryAction(){ /* Core2: C. Plus2: long-press A */
-  if(S.screen===0){ S.moodOverride=(S.moodOverride+1)%4; log("מצב רוח ידני: "+["AUTO","HAPPY","WORRIED","ANGRY"][S.moodOverride],"i"); }
-  else if(S.screen===1){ S.quietSec=0; S.bestQuiet=0; }
-  else if(S.screen===2){ S.gmax=0; }
-  else if(S.screen===3){ S.trip={time:0,brakes:0,turns:0,gmax:0,noiseSum:0,noiseN:0,dist:0}; log("טיול אופס","i"); }
-}
-function changeSetting(){
-  const st=S.set;
-  switch(S.setSel){
-    case 0: st.bright=st.bright%5+1; break;
-    case 1: st.vol=(st.vol+1)%5; break;
-    case 2: st.sens=(st.sens+1)%3; $("sensSel").value=st.sens; break;
-    case 3: st.color=(st.color+1)%COLORS.length; break;
-    case 4: st.wake=!st.wake; break;
-  }
-  beep(900,40);
-}
-function wakeOrOk(now){
-  if(S.state==="IDLE") wake("button",now);
-  else if(S.state==="RECORD") { log("עצירה ידנית","i"); startThink(now); }
-  else if(S.state==="REPLY"||S.state==="ERROR") setState("IDLE",now);
-}
-/* b: Core2 -> A | B | C.  Plus2 -> A | B | P (PWR short) | L (A long-press) */
-function press(b){
-  const now=performance.now(); S.lastTouch=now; audioCtx();
-  if(S.crash){ log("ביטול התראת תאונה: אני בסדר","g"); S.crash=null; beep(660,100); return; }
-  if(SH.on){ shiftPress(b,now); return; }
-  if(BOARD.touch){
-    if(b==="A"){
-      if(S.screen===4){ S.setSel=(S.setSel+1)%SETTINGS.length; return; }
-      wakeOrOk(now);
-    }else if(b==="B"){ goScreen((S.screen+1)%SCREENS.length,now); }
-    else if(b==="C"){ if(S.screen===4) changeSetting(); else secondaryAction(); }
-  }else{
-    /* Plus2: A = wake/confirm (Settings: change value) · B = next screen (Settings: next item) · PWR = Settings in/out · A long = screen action */
-    if(b==="A"){ if(S.screen===4) changeSetting(); else wakeOrOk(now); }
-    else if(b==="B"){
-      if(S.screen===4){ S.setSel=(S.setSel+1)%SETTINGS.length; beep(740,40); }
-      else goScreen((S.screen+1)%(SCREENS.length-1),now);
-    }
-    else if(b==="P"){
-      if(S.screen===4) goScreen(S.prevScreen,now); else { S.prevScreen=S.screen; goScreen(4,now); }
-    }
-    else if(b==="L"){ if(S.screen!==4) secondaryAction(); }
-  }
-}
-$("bA").onclick=()=>press("A"); $("bB").onclick=()=>press("B"); $("bC").onclick=()=>press("C");
-$("pB").onclick=()=>press("B");
-/* Plus2 front button: short press = A, long press (>600ms) = screen action */
-(()=>{ const el=$("pA"); let t=null,fired=false;
-  el.addEventListener("pointerdown",()=>{ fired=false; t=setTimeout(()=>{ fired=true; press("L"); log("A לחיצה ארוכה: פעולת מסך","t"); },600); });
-  const up=()=>{ if(t){ clearTimeout(t); t=null; } };
-  el.addEventListener("pointerup",()=>{ const f=fired; up(); if(!f) press("A"); });
-  el.addEventListener("pointerleave",up); el.addEventListener("pointercancel",up);
-  el.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); } });
-  el.addEventListener("keyup",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); press("A"); } });
-})();
-lcd.addEventListener("click",()=>{
-  if(!BOARD.touch) return; /* Plus2 has no touch screen */
-  if(SH.on){ const n=performance.now(); if(S.crash) press("A"); else if(SH.pocket) shiftPress("A",n); else SH.lastAct=n; return; }
-  if(S.crash||S.state==="IDLE"&&S.screen===0) press("A"); else S.lastTouch=performance.now();
-});
-document.addEventListener("keydown",e=>{
-  if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
-  if(e.ctrlKey||e.metaKey||e.altKey) return;
-  const k=e.key.toLowerCase();
-  if(k==="n"){ if(BOARD.touch) sideShort(); else press("A"); return; }
-  if(k==="h"){ if(BOARD.touch) sideLong(); else if(SH.on) press("L"); else shiftStart(performance.now()); return; }
-  if(BOARD.touch){ if(k==="a"||k==="b"||k==="c") press(k.toUpperCase()); }
-  else{ if(k==="a") press("A"); else if(k==="b") press("B"); else if(k==="p"||k==="c") press("P"); else if(k==="x") press("L"); }
-});
-$("sensSel").onchange=e=>{ S.set.sens=+e.target.value; };
-$("micBtn").onclick=()=>{ audioCtx(); if(!S.micOn) enableMic(); };
-$("shoutBtn").onclick=()=>{ audioCtx(); S.shoutUntil=performance.now()+420; };
-$("dblBtn").onclick=()=>{ audioCtx(); const n=performance.now(); S.shoutUntil=n+420; setTimeout(()=>{ S.shoutUntil=performance.now()+420; },700); };
-$("noise").oninput=e=>{ $("noiseO").textContent=e.target.value+" dB"; };
-$("speed").oninput=e=>{ S.speed=+e.target.value; $("spdO").textContent=S.speed+" קמ״ש"; $("pDrive").textContent=driving()?"בנסיעה":"חניה"; };
-$("axS").oninput=e=>{ S.sax=e.target.value/100; $("axO").textContent=S.sax.toFixed(2)+"g"; };
-$("ayS").oninput=e=>{ S.say=e.target.value/100; $("ayO").textContent=S.say.toFixed(2)+"g"; };
-$("brakeBtn").onclick=()=>impulse(0,-0.7,700);
-$("turnBtn").onclick=()=>impulse(0.65,0,800);
-$("crashBtn").onclick=()=>impulse(0,-5.5,120);
-const SAMPLE_CHIPS=SAMPLES;
-SAMPLE_CHIPS.forEach(s=>{ const b=document.createElement("button"); b.className="chip"; b.textContent=s; b.onclick=()=>{ $("said").value=s; }; $("chips").appendChild(b); });
 
-/* pad drag */
-const pad=$("pad"), dot=$("padDot"); let dragging=false;
-function padMove(e){
-  const r=pad.getBoundingClientRect();
-  const x=clamp((e.clientX-r.left)/r.width*2-1,-1,1), y=clamp((e.clientY-r.top)/r.height*2-1,-1,1);
-  S.padAx=x*0.9; S.padAy=-y*0.9; // up = accelerate (+), down = brake (-)
-  dot.style.left=(50+x*40)+"%"; dot.style.top=(50+y*40)+"%";
-}
-pad.addEventListener("pointerdown",e=>{ dragging=true; pad.setPointerCapture(e.pointerId); padMove(e); });
-pad.addEventListener("pointermove",e=>{ if(dragging) padMove(e); });
-const padEnd=()=>{ dragging=false; S.padAx=0; S.padAy=0; dot.style.left="50%"; dot.style.top="50%"; };
-pad.addEventListener("pointerup",padEnd); pad.addEventListener("pointercancel",padEnd);
-
-/* ---------- drawing ---------- */
-function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
-function txt(s,x,y,size,color,align,font,dir){
-  ctx.font=(font||"600")+" "+size+"px "+(dir?"system-ui,Arial,sans-serif":"ui-monospace,Menlo,Consolas,monospace");
-  ctx.fillStyle=color; ctx.textAlign=align||"left"; ctx.textBaseline="alphabetic"; ctx.direction=dir||"ltr"; ctx.fillText(s,x,y); ctx.direction="ltr";
-}
-function wrap(s,maxW,size){
-  ctx.font="500 "+size+"px system-ui,Arial,sans-serif"; ctx.direction="rtl";
-  const words=s.split(" "), lines=[]; let cur="";
-  for(const w of words){ const t=cur?cur+" "+w:w; if(ctx.measureText(t).width>maxW&&cur){ lines.push(cur); cur=w; } else cur=t; }
-  if(cur) lines.push(cur); ctx.direction="ltr"; return lines;
-}
-function moodFromLevel(l){ return l<62?"happy":l<75?"worried":"angry"; }
-function currentMood(now){
-  if(S.moodOverride) return ["","happy","worried","angry"][S.moodOverride];
-  if(now<S.moodUntil) return S.mood;
-  return moodFromLevel(S.level);
-}
-function drawFace(cx,cy,sc,mood,o){
-  o=o||{}; const col=accent();
-  const ew=54*sc*(o.big||1), eh=(o.eh||70)*sc*(o.big||1), gap=62*sc;
-  let blink=1; if(S.blinkT>=0){ const p=(performance.now()-S.blinkT)/160; blink=p<0.5?1-p*2*0.92:0.08+(p-0.5)*2*0.92; if(p>=1){ S.blinkT=-1; } }
-  const lx=o.look?S.lookX*sc:0, ly=o.look?S.lookY*sc:(o.ly||0)*sc;
-  [-1,1].forEach(side=>{
-    const x=cx+side*gap+lx, y=cy+ly;
-    const h=Math.max(4,eh*(o.confused&&side>0?0.55:1)*blink);
-    ctx.fillStyle=col; rr(x-ew/2,y-h/2,ew,h,18*sc); ctx.fill();
-    ctx.fillStyle="rgba(255,255,255,.45)"; rr(x-ew/2+6*sc,y-h/2+6*sc,10*sc,16*sc*blink,5*sc); ctx.fill();
-    ctx.fillStyle=BG;
-    if(mood==="happy"){ ctx.beginPath(); ctx.arc(x,y+eh*0.62,ew*0.78,0,Math.PI*2); ctx.fill(); }
-    else if(mood==="angry"){ ctx.beginPath(); ctx.moveTo(x-ew/2-4,y-eh/2-6); ctx.lineTo(x+ew/2+4,y-eh/2-6); ctx.lineTo(x-side*(ew/2+4),y-eh/2+eh*0.38); ctx.closePath(); ctx.fill(); }
-    else if(mood==="worried"){ ctx.beginPath(); ctx.moveTo(x-ew/2-4,y-eh/2-6); ctx.lineTo(x+ew/2+4,y-eh/2-6); ctx.lineTo(x+side*(ew/2+4),y-eh/2+eh*0.38); ctx.closePath(); ctx.fill(); }
-  });
-  if(o.mouth!==false){
-    const my=cy+eh*0.5+16*sc;
-    ctx.strokeStyle=col; ctx.lineWidth=4*sc; ctx.lineCap="round"; ctx.beginPath();
-    if(mood==="happy"){ ctx.arc(cx,my-10*sc,20*sc,0.2*Math.PI,0.8*Math.PI); }
-    else if(mood==="angry"){ ctx.arc(cx,my+16*sc,20*sc,1.2*Math.PI,1.8*Math.PI); }
-    else{ ctx.moveTo(cx-16*sc,my+4*sc); ctx.quadraticCurveTo(cx-8*sc,my-2*sc,cx,my+4*sc); ctx.quadraticCurveTo(cx+8*sc,my+10*sc,cx+16*sc,my+4*sc); }
-    ctx.stroke();
-  }
-}
-/* All screens are laid out from W, H, HH (header) and FH (footer). C = short screen (StickC PLUS2). */
-function header(now){
-  ctx.fillStyle="#0f151c"; ctx.fillRect(0,0,W,HH);
-  const fs=C?9:11, by=C?12:14;
-  txt("DASHIE",8,by,fs,accent(),"left","700");
-  txt(SH.on?"SHIFT":SCREENS[S.screen].toUpperCase(),W/2,by,C?9:10,DIM,"center","600");
-  const d=new Date(); txt(d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0"),W-8,by,fs,FG,"right","600");
-  const net=$("netSel").value, wy=C?12:15, ws=C?2.6:3.2;
-  ctx.strokeStyle=net==="nowifi"?"#ff5d5d":"#46d17a"; ctx.lineWidth=2;
-  for(let i=1;i<=3;i++){ ctx.beginPath(); ctx.arc(W-(C?46:52),wy,i*ws,-Math.PI*0.85,-Math.PI*0.15); ctx.stroke(); }
-  const mx=W-(C?64:72), my=C?8:10;
-  ctx.fillStyle=S.set.wake?"#46d17a":"#6b7886"; ctx.beginPath(); ctx.arc(mx,my,3,0,7); ctx.fill();
-  ctx.fillRect(mx-2,my+2,4,2);
-  if(!BOARD.speaker&&S.a2dp!=="off") txt("BT",C?52:60,by,8,"#5cc8ff","left","700");
-}
-function footer(a,b,c){
-  ctx.fillStyle="#0f151c"; ctx.fillRect(0,H-FH,W,FH);
-  const fs=C?9:10, y=H-(C?4:7);
-  txt(a,W/6,y,fs,DIM,"center","700"); txt(b,W/2,y,fs,DIM,"center","700"); txt(c,W*5/6,y,fs,DIM,"center","700");
-}
-/* footer labels per board. kind: wake | rec | ok | settings | reset */
-function foot(kind,resetLabel){
-  if(BOARD.touch){
-    if(kind==="settings") return ["ITEM","SCREEN","CHANGE"];
-    return [kind==="rec"?"STOP":kind==="ok"?"OK":"WAKE","SCREEN",resetLabel||"RESET"];
-  }
-  if(kind==="settings") return ["A CHANGE","B ITEM","PWR BACK"];
-  return [kind==="rec"?"A STOP":kind==="ok"?"A OK":"A WAKE","B NEXT","PWR SET"];
-}
-function drawIdleFace(now){
-  const idleMs=now-S.lastTouch;
-  const mood=currentMood(now);
-  const st=S.state, ch=H-HH-FH;
-  const fcy=C?HH+42:104, fsc=C?0.6:1; /* face centre / scale */
-  let big=1,ly=0,conf=false,look=true;
-  if(now>S.blinkAt&&S.blinkT<0){ S.blinkT=now; S.blinkAt=now+2000+Math.random()*3500; }
-  if(now>S.lookAt){ S.lookAt=now+1800+Math.random()*2500; S.lookTX=(Math.random()-0.5)*16; S.lookTY=(Math.random()-0.5)*8; }
-  S.lookX+=(S.lookTX-S.lookX)*0.06; S.lookY+=(S.lookTY-S.lookY)*0.06;
-  if(st==="LISTEN"){ big=1.18; look=false; const p=((now-S.stateT)/400); ctx.strokeStyle=accent(); ctx.lineWidth=3; ctx.globalAlpha=1-p*0.6; ctx.beginPath(); ctx.arc(W/2,C?fcy+2:106,(70+p*40)*fsc,0,7); ctx.stroke(); ctx.globalAlpha=1; }
-  if(st==="THINK"){ look=false; ly=-12; }
-  if(st==="ERROR"){ conf=true; look=false; }
-  if(st==="REPLY"||st==="RECORD"){
-    if(!C) drawFace(W/2,56,0.5,st==="RECORD"?"happy":mood==="angry"?"worried":"happy",{eh:62,mouth:false,look:false});
-    else if(st==="RECORD") drawFace(W-34,HH+22,0.28,"happy",{eh:62,mouth:false,look:false});
-  }else drawFace(W/2,fcy,fsc,st==="ERROR"?"worried":st==="LISTEN"?"happy":mood,{big,ly,confused:conf,look,eh:70});
-  if(st==="IDLE"){
-    if(!C){
-      const d=new Date(); txt(d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0"),W/2,196,22,FG,"center","700");
-      txt(S.set.wake?"say \"HEY!\" twice  ·  or press A":"press A to talk",W/2,212,10,DIM,"center","600");
-    }else txt(S.set.wake?"say \"HEY!\" twice · or A":"press A to talk",W/2,H-FH-6,9,DIM,"center","600");
-  }
-  if(st==="LISTEN") txt("LISTENING",W/2,C?H-FH-6:200,C?11:14,accent(),"center","700");
-  if(st==="THINK"){
-    const n=Math.floor(now/250)%4, dy=C?H-FH-20:196;
-    for(let i=0;i<3;i++){ ctx.fillStyle=i<n?accent():"#2a3541"; ctx.beginPath(); ctx.arc(W/2-20+i*20,dy,C?4:5,0,7); ctx.fill(); }
-    txt("THINKING",W/2,C?H-FH-6:214,C?9:10,DIM,"center","700");
-  }
-  if(st==="ERROR") txt(S.errMsg,W/2,C?H-FH-8:200,C?12:15,"#ff7a7a","center","700");
-  if(st==="RECORD"){
-    const rec=Math.floor(now/400)%2, ry=C?HH+16:50; ctx.fillStyle=rec?"#ff5d5d":"#5a2a2a"; ctx.beginPath(); ctx.arc(C?14:24,ry,C?5:6,0,7); ctx.fill();
-    txt("REC "+((now-S.recStart)/1000).toFixed(1)+"s",C?26:38,ry+4,C?10:11,FG,"left","700");
-    const L=S.recLevels, bw=C?3:4, n=Math.min(L.length,64), wmid=C?HH+ch/2+6:180, wmax=C?40:70;
-    for(let i=0;i<n;i++){ const v=clamp((L[L.length-n+i]-S.floor)/30,0.04,1); const h=v*wmax; ctx.fillStyle=accent(); ctx.fillRect(W/2-n*bw/2+i*bw,wmid-h/2,bw-1,h); }
-    txt(S.speechHeard?"speech detected":"waiting for speech…",W/2,C?H-FH-6:216,C?9:10,DIM,"center","600");
-  }
-  if(st==="REPLY"){
-    const px=C?8:12, py=C?HH+4:86, pw=W-2*px, ph=C?ch-8:118, fs=C?12:15, lh=C?15:20;
-    ctx.fillStyle="#131b24"; rr(px,py,pw,ph,C?8:12); ctx.fill();
-    const lines=wrap(S.reply,pw-(C?18:32),fs), vis=Math.max(1,Math.floor((ph-(C?24:34))/lh)), tot=lines.length;
-    const el=(now-S.stateT)/1000, off=tot>vis?Math.floor(clamp(el/2.2-0.6,0,tot-vis)):0;
-    lines.slice(off,off+vis).forEach((l,i)=>txt(l,px+pw-(C?10:16),py+(C?18:26)+i*lh,fs,FG,"right","500","rtl"));
-    const left=Math.ceil(8-el), by=py+ph-(C?6:8);
-    txt("back in "+left+"s",px+pw-(C?10:6),by,9,DIM,"right","600");
-    if(tot>vis) txt(`${off+1}/${tot-vis+1}`,px+(C?10:6),by,9,DIM,"left","600");
-    if(!BOARD.speaker){
-      const conn=S.a2dp==="connecting", on=S.a2dp==="streaming";
-      const lab=conn?"BT CONNECTING…":on?"BT › CAR KIT  ♪":"BT › CAR KIT";
-      ctx.fillStyle=on?"#5cc8ff":conn?"#ffcf4a":"#3a4a5a"; ctx.beginPath(); ctx.arc(px+12,by-3,3,0,7); ctx.fill();
-      txt(lab,px+20,by,9,on?"#5cc8ff":conn?"#ffcf4a":DIM,"left","700");
-    }
-  }
-  const f=foot(st==="IDLE"?"wake":st==="RECORD"?"rec":"ok","MOOD"); footer(f[0],f[1],f[2]);
-  // auto dim
-  if(st==="IDLE"&&idleMs>20000){ ctx.fillStyle="rgba(0,0,0,.6)"; ctx.fillRect(0,0,W,H); }
-}
-function drawNoise(now){
-  const l=S.level, m=moodFromLevel(l);
-  const col=l<60?"#46d17a":l<75?"#ffcf4a":"#ff5d5d";
-  if(!C){
-    txt(Math.round(l).toString(),22,92,58,col,"left","700"); txt("dB",118,92,16,DIM,"left","700");
-    txt("CABIN NOISE",24,40,10,DIM,"left","700");
-    drawFace(250,66,0.34,m,{eh:66,mouth:true});
-    txt("QUIET "+S.quietSec+"s",160,92,13,FG,"left","700"); txt("BEST "+S.bestQuiet+"s",160,110,11,DIM,"left","600");
-  }else{
-    txt(Math.round(l).toString(),10,HH+46,38,col,"left","700"); txt("dB",78,HH+46,12,DIM,"left","700");
-    drawFace(W-34,HH+32,0.26,m,{eh:66,mouth:true});
-    txt("QUIET "+S.quietSec+"s",104,HH+22,10,FG,"left","700"); txt("BEST "+S.bestQuiet+"s",104,HH+36,9,DIM,"left","600");
-  }
-  // histogram
-  const x0=C?12:14, y0=C?H-FH-7:196, bh=C?36:70; ctx.fillStyle="#111820"; ctx.fillRect(x0-4,y0-bh-6,W-2*x0+8,bh+10);
-  [60,75].forEach(t=>{ const y=y0-(t-30)/70*bh; ctx.strokeStyle=t===60?"#2e6b46":"#6b5a22"; ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(x0-4,y); ctx.lineTo(W-x0+4,y); ctx.stroke(); ctx.setLineDash([]); if(!C||t===60) txt(String(t),W-x0+2,y-2,8,DIM,"right","600"); });
-  const bw=(W-2*x0)/60;
-  S.hist.forEach((v,i)=>{ const h=clamp((v-30)/70,0.02,1)*bh; ctx.fillStyle=v<60?"#46d17a":v<75?"#ffcf4a":"#ff5d5d"; ctx.fillRect(x0+(60-S.hist.length+i)*bw,y0-h,bw-1,h); });
-  txt("60s",x0,y0+0,8,DIM,"left","600");
-  const f=foot("wake","RESET"); footer(f[0],f[1],f[2]);
-}
-function drawG(now){
-  const ch=H-HH-FH;
-  const R=C?Math.floor(ch/2)-4:76, cx=C?R+14:100, cy=C?HH+ch/2:122, k=R*0.79;
-  ctx.fillStyle="#111820"; ctx.beginPath(); ctx.arc(cx,cy,R,0,7); ctx.fill();
-  ctx.strokeStyle="#26323f"; ctx.lineWidth=1;
-  [0.5,1].forEach(g=>{ ctx.beginPath(); ctx.arc(cx,cy,g*k,0,7); ctx.stroke(); });
-  ctx.beginPath(); ctx.moveTo(cx-R,cy); ctx.lineTo(cx+R,cy); ctx.moveTo(cx,cy-R); ctx.lineTo(cx,cy+R); ctx.stroke();
-  ctx.strokeStyle="#6b5a22"; ctx.setLineDash([3,3]); ctx.beginPath(); ctx.arc(cx,cy,0.45*k,0,7); ctx.stroke(); ctx.setLineDash([]);
-  let bx=S.ax*k, by=S.ay*k; const bl=Math.hypot(bx,by), br=C?6:9; if(bl>R-br+1){ bx*=(R-br+1)/bl; by*=(R-br+1)/bl; }
-  const g=Math.hypot(S.ax,S.ay);
-  ctx.fillStyle=g>0.45?"#ff5d5d":accent(); ctx.shadowColor=ctx.fillStyle; ctx.shadowBlur=C?8:12; ctx.beginPath(); ctx.arc(cx+bx,cy+by,br,0,7); ctx.fill(); ctx.shadowBlur=0;
-  txt("BRAKE",cx,cy+R-(C?3:4),C?7:8,DIM,"center","600"); txt("ACCEL",cx,cy-R+(C?9:10),C?7:8,DIM,"center","600");
-  if(!C){
-    const x=196; txt("G NOW",x,50,10,DIM,"left","700"); txt(g.toFixed(2),x,78,26,FG,"left","700");
-    txt("MAX",x,102,10,DIM,"left","700"); txt(S.gmax.toFixed(2)+"g",x,122,16,accent(),"left","700");
-    txt("BRAKES  "+S.trip.brakes,x,150,12,FG,"left","700"); txt("TURNS   "+S.trip.turns,x,170,12,FG,"left","700");
-    txt(driving()?"DRIVING "+S.speed+" km/h":"PARKED",x,196,10,driving()?"#46d17a":DIM,"left","700");
-  }else{
-    const x=cx+R+16; let y=HH+14;
-    txt("G NOW",x,y,8,DIM,"left","700"); txt(g.toFixed(2),x,y+22,22,FG,"left","700");
-    txt("MAX "+S.gmax.toFixed(2)+"g",x,y+40,11,accent(),"left","700");
-    txt("BRAKES "+S.trip.brakes,x,y+57,10,FG,"left","700"); txt("TURNS  "+S.trip.turns,x,y+70,10,FG,"left","700");
-    txt(driving()?"DRIVE "+S.speed+" km/h":"PARKED",x,y+84,9,driving()?"#46d17a":DIM,"left","700");
-  }
-  const f=foot("wake","RESET MAX"); footer(f[0],f[1],f[2]);
-}
-function fmtT(s){ s=Math.floor(s); return [Math.floor(s/3600),Math.floor(s/60)%60,s%60].map(n=>String(n).padStart(2,"0")).join(":"); }
-function drawTrip(now){
-  const t=S.trip;
-  const rows=[["Distance",t.dist.toFixed(2)+" km"],["Hard brakes",String(t.brakes)],["Sharp turns",String(t.turns)],["Max G",t.gmax.toFixed(2)+"g"],["Avg noise",(t.noiseN?t.noiseSum/t.noiseN:0).toFixed(0)+" dB"]];
-  if(!C){
-    txt("TRIP",20,44,10,DIM,"left","700"); txt(fmtT(t.time),W/2,96,42,FG,"center","700");
-    rows.forEach((r,i)=>{ const y=128+i*18; txt(r[0],34,y,12,DIM,"left","600"); txt(r[1],W-34,y,13,i===1&&t.brakes>3?"#ff7a7a":FG,"right","700"); ctx.fillStyle="#1a232d"; ctx.fillRect(30,y+5,W-60,1); });
-  }else{
-    txt(fmtT(t.time),W/2,HH+34,28,FG,"center","700");
-    const colW=(W-24)/2;
-    rows.forEach((r,i)=>{ const col=i<3?0:1, row=i<3?i:i-3, x=12+col*colW, y=HH+56+row*15;
-      txt(r[0],x,y,9,DIM,"left","600"); txt(r[1],x+colW-12,y,10,i===1&&t.brakes>3?"#ff7a7a":FG,"right","700");
-      ctx.fillStyle="#1a232d"; ctx.fillRect(x,y+3,colW-12,1); });
-  }
-  const f=foot("wake","RESET"); footer(f[0],f[1],f[2]);
-}
-function drawSettings(now){
-  const st=S.set, vals=[Math.round(st.bright*20)+"%", st.vol===0?"MUTE":"▮".repeat(st.vol), SENS[st.sens][0], COLORS[st.color][0], st.wake?"ON":"OFF"];
-  if(!C) txt("SETTINGS",20,44,10,DIM,"left","700");
-  const ih=C?18:24, step=C?20:30, y0=C?HH+3:60, mx=C?8:14, fs=C?11:13;
-  SETTINGS.forEach((n,i)=>{ const y=y0+i*step, sel=i===S.setSel;
-    ctx.fillStyle=sel?"#1b2733":"#10161d"; rr(mx,y,W-2*mx,ih,C?6:8); ctx.fill();
-    if(sel){ ctx.strokeStyle=accent(); ctx.lineWidth=2; rr(mx,y,W-2*mx,ih,C?6:8); ctx.stroke(); }
-    txt(n,mx+12,y+ih-(C?5:8),fs,sel?FG:DIM,"left","700"); txt(vals[i],W-mx-12,y+ih-(C?5:8),fs,accent(),"right","700"); });
-  const f=foot("settings"); footer(f[0],f[1],f[2]);
-}
-function drawCrash(now){
-  const left=15-(now-S.crash.t0)/1000, flash=Math.floor(now/300)%2;
-  ctx.fillStyle=flash?"#8f1010":"#5a0a0a"; ctx.fillRect(0,0,W,H);
-  if(S.crash.sos){
-    if(!C){ txt("SOS",W/2,98,56,"#fff","center","700"); txt("CALL EMERGENCY",W/2,134,18,"#fff","center","700"); txt("112 / 101",W/2,160,16,"#ffd0d0","center","700"); }
-    else{ txt("SOS",W/2,66,40,"#fff","center","700"); txt("CALL EMERGENCY",W/2,88,14,"#fff","center","700"); txt("112 / 101",W/2,106,12,"#ffd0d0","center","700"); }
-  }else{
-    if(!C){
-      txt("IMPACT DETECTED",W/2,52,20,"#fff","center","700"); txt("Are you OK?",W/2,82,18,"#ffd0d0","center","700");
-      txt(Math.ceil(left).toString(),W/2,152,64,"#fff","center","700");
-      ctx.fillStyle="rgba(255,255,255,.25)"; ctx.fillRect(30,172,W-60,8); ctx.fillStyle="#fff"; ctx.fillRect(30,172,(W-60)*clamp(left/15,0,1),8);
-    }else{
-      txt("IMPACT DETECTED",W/2,24,14,"#fff","center","700"); txt("Are you OK?",W/2,42,12,"#ffd0d0","center","700");
-      txt(Math.ceil(left).toString(),W/2,90,44,"#fff","center","700");
-      ctx.fillStyle="rgba(255,255,255,.25)"; ctx.fillRect(24,100,W-48,6); ctx.fillStyle="#fff"; ctx.fillRect(24,100,(W-48)*clamp(left/15,0,1),6);
-    }
-  }
-  txt(BOARD.touch?"TAP / A = I'M OK":"PRESS A = I'M OK",W/2,H-(C?8:26),C?10:13,"#fff","center","700");
-}
-function draw(now){
-  ctx.fillStyle=BG; ctx.fillRect(0,0,W,H);
-  if(S.crash){ drawCrash(now); }
-  else if(SH.on&&SH.pocket){ ctx.fillStyle="#000"; ctx.fillRect(0,0,W,H); return; }
-  else if(SH.on){ header(now); drawShift(now); }
-  else{
-    header(now);
-    [drawIdleFace,drawNoise,drawG,drawTrip,drawSettings][S.screen](now);
-  }
-  const dark=1-clamp(S.set.bright/5,0.2,1); if(dark>0){ ctx.fillStyle="rgba(0,0,0,"+(dark*0.8)+")"; ctx.fillRect(0,0,W,H); }
-}
-
-/* ---------- live meter canvas ---------- */
-const mc=$("meter"), mx=mc.getContext("2d");
-function cssv(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
-function drawMeter(){
-  const w=mc.width,h=mc.height; mx.clearRect(0,0,w,h);
-  const lo=30,hi=110, Y=v=>h-6-(clamp(v,lo,hi)-lo)/(hi-lo)*(h-12);
-  mx.strokeStyle=cssv("--line"); mx.lineWidth=1; mx.font="16px monospace"; mx.fillStyle=cssv("--muted"); mx.textAlign="left";
-  [40,60,80,100].forEach(v=>{ mx.beginPath(); mx.moveTo(0,Y(v)); mx.lineTo(w,Y(v)); mx.stroke(); mx.fillText(v,4,Y(v)-3); });
-  const n=S.samples.length; if(!n) return;
-  const X=i=>(i/199)*w+(w-(n-1)/199*w)*0; const off=200-n;
-  const line=(idx,color,wd)=>{ mx.strokeStyle=color; mx.lineWidth=wd; mx.beginPath(); S.samples.forEach((s,i)=>{ const x=(off+i)/199*w, y=Y(s[idx]); i?mx.lineTo(x,y):mx.moveTo(x,y); }); mx.stroke(); };
-  line(1,cssv("--good"),2); line(2,cssv("--bad"),2); line(0,cssv("--info"),3);
-}
-function updateReadouts(now){
-  $("rLvl").textContent=S.level.toFixed(0); $("rFloor").textContent=S.floor.toFixed(0); $("rThr").textContent=S.thr.toFixed(0);
-  $("rBurst").textContent=S.bursts.length+"/2";
-  const r=S.refr-now; $("rRef").textContent=r>0?(r/1000).toFixed(1)+"s":"–";
-}
-
-/* ---------- shift mode (סיכום משמרת) ---------- */
-const Q_MAIN=["איך עבר הקו?","היו אירועים חריגים?","איך כל עמדה התנהלה?","איך נהגת בסיטואציות?"];
+/* =====================================================================================
+   SHIFT MODE (device side: shiftAction / noteStart / noteStop / SQ / SWAIT in main.cpp)
+   ===================================================================================== */
 const Q_FOLLOW=["באיזו שעה בדיוק נגמר השרימפס, ומי היה בעמדה?","המקרר תוקן, או שנשאר פתוח לטכנאי?"];
 const NOTE_SAMPLES=[
   {t:"שיא עומס התחיל, הקצב טוב.",tag:"הלך משמרת"},
@@ -978,133 +1252,508 @@ const ANS_SAMPLES=[
   "בערך בשמונה ועשר, טבח הגריל היה בעמדה.",
   "המקרר לא תוקן, צריך לקרוא לטכנאי מחר."
 ];
-const SH={on:false,phase:"off",startAt:0,offset:0,startDate:null,notes:[],pocket:false,noteRec:false,noteStart:0,levels:[],lvAcc:0,
-  q:0,qList:[],round:0,lastAct:0,vib:0,lowWarned:false,result:null,uiAcc:0,rec:null,thinkAt:0,seq:0,touchLog:0,endElapsed:0,batt:87};
-let micStreamRef=null;
-const shiftElapsed=now=>Math.max(0,now-SH.startAt)+SH.offset;
-const pad2=n=>String(n).padStart(2,"0");
-const fmtMS=s=>pad2(Math.floor(s/60))+":"+pad2(Math.floor(s)%60);
-
-function haptic(pat){
-  SH.vib++;
-  const dv=$("device");
-  if(BOARD.id==="core2"){
-    dv.classList.remove("shake"); void dv.offsetWidth; dv.classList.add("shake"); setTimeout(()=>dv.classList.remove("shake"),420);
-    try{ if(navigator.vibrate) navigator.vibrate(pat); }catch(e){}
-    log("רטט ["+pat.join(",")+"]ms","i");
-  }else{
-    beep(1500,60,0.06);
-    log("אין מנוע רטט ב-PLUS2: צפצוף קצר במקום ["+pat.join(",")+"]","i");
-  }
-  const p=$("shPillVib"); p.classList.add("on"); setTimeout(()=>p.classList.remove("on"),450); p.lastChild.textContent="רטט: "+SH.vib;
-}
-function speakText(t){
-  if(!("speechSynthesis" in window)) return false;
-  try{
-    speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance(t); u.lang="he-IL";
-    const v=(speechSynthesis.getVoices()||[]).find(x=>/^he/i.test(x.lang)); if(v) u.voice=v;
-    speechSynthesis.speak(u); return true;
-  }catch(e){ return false; }
-}
-function deviceSpeak(t){
-  const ok=speakText(t);
-  if(!BOARD.speaker){ const n=performance.now(); S.a2dp="streaming"; S.a2dpAt=n; S.a2dpEnd=n+clamp(t.length*60,1200,9000); setAudioPill(); log("A2DP: משדר לדיבורית הרכב","i"); }
-  if(!ok) log("הקראה: הדפדפן לא תומך ב-speechSynthesis. במכשיר האמיתי זה יוצא מ-ElevenLabs דרך audio_url","t");
-  return ok;
-}
-function setPocket(v,now){
-  if(SH.pocket===v) return;
-  SH.pocket=v; $("device").classList.toggle("pocket",v); $("pocketBar").hidden=!v;
-  if(!v) SH.lastAct=now;
-  log(v?"מצב כיס: המסך כבה, המגע מנוטרל, כפתור ההערה פעיל":"המסך הוער, המגע חזר","s"); updateShiftUI();
-}
-function shiftStart(now){
-  if(SH.on) return; audioCtx();
-  Object.assign(SH,{on:true,phase:"run",startAt:now,offset:0,startDate:new Date(),notes:[],pocket:false,noteRec:false,q:0,round:0,qList:[],lastAct:now,result:null,seq:0,lowWarned:false,rec:null});
-  $("resCard").hidden=true; $("device").classList.remove("pocket"); $("pocketBar").hidden=true;
-  $("shJson").textContent=JSON.stringify({endpoint:"POST /shift/start",shift_id:"demo-"+SH.startDate.toISOString().slice(0,10),started_at:SH.startDate.toISOString()},null,1);
-  haptic([80]); beep(988,80); log("משמרת התחילה. זמן התחלה מ-RTC: "+SH.startDate.toLocaleTimeString("he-IL"),"g"); log("bridge ← POST /shift/start","i");
-  renderNotes(); updateShiftUI();
-}
-function shiftClose(){
-  if(SH.noteRec){ SH.noteRec=false; if(SH.rec){ try{ SH.rec.mr.stop(); }catch(e){} SH.rec=null; } }
-  try{ if("speechSynthesis" in window) speechSynthesis.cancel(); }catch(e){}
-  SH.on=false; SH.phase="off"; setPocket(false,performance.now()); log("יציאה ממצב משמרת","s"); updateShiftUI();
-}
+const SAMPLES=["מה מזג האוויר מחר?","נווט הביתה","שים מוזיקה","מה השעה?","אני עייף","כמה דלק נשאר?","התקשר לאמא"];
 function classify(t){
   if(/שרימפס|תקלה|מקרר|תלונ|אירוע|חסר|נגמר/.test(t)) return "אירוע חריג";
   if(/עצרתי|החלטתי|ניגשתי|נגשתי|אני /.test(t)) return "איך נהגתי";
   if(/גריל|פסטה|פסטות|קו|פס|טבח|שטיפה/.test(t)) return "עמדות";
   return "הלך משמרת";
 }
-function startNote(now){
-  SH.noteRec=true; SH.noteStart=now; SH.levels=[]; SH.lvAcc=0; SH.lastAct=SH.pocket?SH.lastAct:now; haptic([60]);
-  SH.rec=null;
+function shiftStartDev(now){
+  if(SH.on||SH.finishing) return; audioCtx();
+  Object.assign(SH,{on:true,finishing:false,startedAt:now,offset:0,startDate:new Date(),notes:[],noteRec:false,seq:0,round:0,summaryReady:false,result:null,lowWarned:false,rec:null,writeErr:false,detached:false});
+  $("resCard").hidden=true; S.lastActivity=now;
+  $("shJson").textContent=JSON.stringify({endpoint:"POST /shift/start",shift_id:"demo-"+SH.startDate.toISOString().slice(0,10),started_at:SH.startDate.toISOString()},null,1);
+  haptic("l"); beep(988,80); log("משמרת התחילה (החזקת A במסך Shift). זמן התחלה מ-RTC: "+SH.startDate.toLocaleTimeString("he-IL"),"g"); log("bridge ← POST /shift/start","i");
+  renderNotes(); updateShiftUI();
+}
+function noteStart(now,ret){
+  stopPlayback(); haptic("s");
+  SH.noteRec=true; SH.noteStart=now; SH.levels=[]; SH.lvAcc=0; S.noteReturn=ret; S.wave.fill(0); SH.rec=null;
   if(S.micOn&&micStreamRef&&window.MediaRecorder){
     try{ const mr=new MediaRecorder(micStreamRef), ch=[]; mr.ondataavailable=e=>{ if(e.data&&e.data.size) ch.push(e.data); }; mr.start(); SH.rec={mr,ch}; }catch(e){ SH.rec=null; }
   }
-  log("הערה: הקלטה התחילה"+(SH.rec?" (מיקרופון אמיתי)":" (סימולציה)"),"s"); updateShiftUI();
+  log("הערה: הקלטה התחילה"+(SH.rec?" (מיקרופון אמיתי)":" (סימולציה)")+(ret==="SQ"?" · תשובה לשאלה":""),"s");
+  setSt("NOTE",now); updateShiftUI();
 }
-function stopNote(now,auto){
+function noteStop(now,auto){
   if(!SH.noteRec) return; SH.noteRec=false;
-  const dur=(now-SH.noteStart)/1000; haptic(auto?[60,60,60]:[40,40]);
-  const inQ=SH.phase==="qa"||SH.phase==="follow", typed=$("noteText").value.trim();
-  let sm;
-  if(inQ) sm={t:ANS_SAMPLES[(SH.round?4:0)+SH.q]||"…",tag:"תשובה "+(SH.q+1)+"/"+SH.qList.length+(SH.round?" (המשך)":"")};
-  else if(typed){ sm={t:typed,tag:classify(typed)}; $("noteText").value=""; }
-  else sm=NOTE_SAMPLES[SH.seq%NOTE_SAMPLES.length];
-  SH.seq++;
-  const note={n:SH.notes.length+1,at:new Date(),t0:now,dur,text:sm.t,tag:sm.tag,url:null,status:"queued"};
-  if(SH.rec){
-    const {mr,ch}=SH.rec;
-    mr.onstop=()=>{ try{ note.url=URL.createObjectURL(new Blob(ch,{type:mr.mimeType||"audio/webm"})); }catch(e){} renderNotes(); };
-    try{ mr.stop(); }catch(e){}
-    SH.rec=null; if(!typed||inQ) note.text="(הקלטה אמיתית, התמלול נעשה ב-bridge)";
+  const dur=(now-SH.noteStart)/1000, ret=S.noteReturn; S.noteReturn="IDLE";
+  const ok=dur>=1.0;   /* SHIFT_NOTE_MIN_MS: shorter presses are discarded */
+  if(!ok){
+    if(SH.rec){ try{ SH.rec.mr.stop(); }catch(e){} SH.rec=null; }
+    log("הערה קצרה מדי ("+dur.toFixed(1)+" שנ׳): נמחקה","t");
+  }else{
+    const inQ=ret==="SQ", typed=$("noteText").value.trim();
+    let sm;
+    if(inQ) sm={t:ANS_SAMPLES[(S.sqFollow?4:0)+S.sqIdx]||"…",tag:"תשובה "+(S.sqIdx+1)+"/"+S.sqQ.length+(S.sqFollow?" (המשך)":"")};
+    else if(typed){ sm={t:typed,tag:classify(typed)}; $("noteText").value=""; }
+    else sm=NOTE_SAMPLES[SH.seq%NOTE_SAMPLES.length];
+    SH.seq++;
+    const note={n:SH.notes.length+1,at:new Date(),t0:now,dur,text:sm.t,tag:sm.tag,url:null,status:"queued"};
+    if(SH.rec){
+      const {mr,ch}=SH.rec; mr.onstop=()=>{ try{ note.url=URL.createObjectURL(new Blob(ch,{type:mr.mimeType||"audio/webm"})); }catch(e){} renderNotes(); };
+      try{ mr.stop(); }catch(e){} SH.rec=null; if(!typed||inQ) note.text="(הקלטה אמיתית, התמלול נעשה ב-bridge)";
+    }
+    SH.notes.push(note); log("הערה "+note.n+" נשמרה ("+dur.toFixed(1)+" שנ׳"+(auto?", עצירה אוטומטית ב-90 שנ׳":"")+")","g"); renderNotes();
   }
-  SH.notes.push(note); log("הערה "+note.n+" נשמרה ("+dur.toFixed(1)+" שנ׳"+(auto?", עצירה אוטומטית ב-90 שנ׳":"")+")","g");
-  renderNotes(); updateShiftUI();
-  if(inQ) advanceQ(now);
+  haptic(ok?(auto?"sss":"ss"):"");
+  if(ret==="SQ"){ setSt("SQ",now); if(ok) sqNext(now); } else setSt("IDLE",now);
+  updateShiftUI();
 }
-function noteToggle(now){
-  if(!SH.on) return;
-  if(SH.phase==="done"){ replaySummary(); return; }
-  if(SH.phase==="think") return;
-  if(SH.noteRec) stopNote(now,false); else startNote(now);
+function sqShow(now){
+  S.sqMode="QUESTIONS"; S.replyLines=wrapLines(S.sqQ[S.sqIdx],L.wrapW,2); setSt("SQ",now); haptic("s");
+  const t=S.sqQ[S.sqIdx]; log((S.sqFollow?"שאלת המשך ":"שאלה ")+(S.sqIdx+1)+"/"+S.sqQ.length+": "+t,"s");
+  if(!S.sqFollow&&BOARD.speaker&&S.cfg.vol>0) speakText(t);   /* spoken questions: GET /shift/question/<n>.wav, own speaker, never the kit */
+  updateShiftUI();
 }
-function shiftEnd(now){
-  if(SH.phase!=="run") return;
-  if(SH.noteRec) stopNote(now,false);
-  SH.endElapsed=shiftElapsed(now); SH.phase="qa"; SH.q=0; SH.round=0; SH.qList=Q_MAIN; setPocket(false,now);
-  haptic([100,60,100]); log("סיום משמרת: "+Q_MAIN.length+" שאלות סיכום","s"); readQuestion(now);
+function startQuestions(now){ S.sqQ=[T.S_Q1,T.S_Q2,T.S_Q3,T.S_Q4]; S.sqIdx=0; S.sqFollow=false; sqShow(now); }
+function sqNext(now){ S.sqIdx++; if(S.sqIdx<S.sqQ.length) sqShow(now); else swaitStart(now); }
+function swaitStart(now){
+  SH.finishing=true; SH.on=false; S.swaitStart=now; S.swaitSince=now; stopSpeechAudio();
+  log("bridge ← POST /shift/finish ("+SH.notes.length+" הערות)","i"); setSt("SWAIT",now); updateShiftUI();
 }
-function readQuestion(now){
-  SH.lastAct=now; const t=SH.qList[SH.q];
-  log("שאלה "+(SH.q+1)+"/"+SH.qList.length+": "+t,"s"); deviceSpeak(t); updateShiftUI();
-}
-function advanceQ(now){
-  SH.q++;
-  if(SH.q>=SH.qList.length) shiftSubmit(now); else readQuestion(now);
-}
-function shiftSubmit(now){
-  SH.phase="think"; SH.thinkAt=now; setPocket(false,now);
-  log("bridge ← POST /shift/finish ("+SH.notes.length+" הערות)","i"); updateShiftUI();
-}
-function finishThink(now){
+function swaitDone(now){
   if(SH.round===0&&$("shFollow").checked){
-    SH.round=1; SH.phase="follow"; SH.qList=Q_FOLLOW; SH.q=0;
+    SH.round=1; S.sqQ=Q_FOLLOW; S.sqIdx=0; S.sqFollow=true;
     $("shJson").textContent=JSON.stringify({status:"need_info",questions:Q_FOLLOW},null,1);
-    log("bridge → need_info ("+Q_FOLLOW.length+" שאלות המשך)","i"); haptic([50,50]); readQuestion(now); return;
+    log("bridge → need_info ("+Q_FOLLOW.length+" שאלות המשך)","i"); haptic("ss"); sqShow(now); return;
   }
   const docsFail=$("shDocsFail").checked;
   SH.result=buildSummary(); SH.result.delivered={email:true,docs:docsFail?null:"https://docs.google.com/document/d/DEMO-EXAMPLE"};
-  SH.phase="done"; haptic([200]); beep(1175,90);
-  $("shJson").textContent=JSON.stringify({status:"done",summary_md:"# סיכום משמרת — …",spoken:SH.result.spoken.slice(0,48)+"…",audio_url:"http://bridge.local:8787/shift/audio/demo.wav",delivered:SH.result.delivered},null,1);
+  SH.lastSummary=SH.result; SH.finishing=false; SH.endElapsed=SH.endElapsed||shiftElapsed(now);
+  $("shJson").textContent=JSON.stringify({status:"done",summary_md:"# סיכום משמרת — …",spoken:SH.result.spoken.slice(0,48)+"…",audio_urls:["…/shift/audio/demo-1.wav","…/shift/audio/demo-2.wav"],delivered:SH.result.delivered},null,1);
   log("bridge → done. מייל נשלח"+(docsFail?", Google Docs נכשל (הסיכום נשמר)":", Google Doc נוצר"),docsFail?"e":"g");
-  renderResult(); updateShiftUI();
-  if($("shAuto").checked) deviceSpeak(SH.result.spoken);
+  renderResult();
+  if(SH.detached){ SH.summaryReady=true; haptic("ssl"); setSt("IDLE",now); S.lastActivity=now; }
+  else{ SH.summaryReady=false; S.thinkFor="summary"; S.thinkDur=900; setSt("THINK",now); }
+  updateShiftUI();
 }
-function replaySummary(){ if(SH.result){ log("הקראה חוזרת של הסיכום","i"); deviceSpeak(SH.result.spoken); } }
+function startReadLast(now){
+  if(!SH.lastSummary){ toInfo("S_NO_SUMMARY",now); return; }
+  SH.summaryReady=false; S.thinkFor="summary"; S.thinkDur=900; log("הקראת הסיכום האחרון","i"); setSt("THINK",now);
+}
+function shiftAction(which,now){
+  if(S.st==="PALERT"||S.st==="FIND") return false;
+  const on=SH.on;
+  if(S.st==="IDLE"&&S.screen==="SHIFT"){
+    if(which==="A"){ if(on) which="N"; else return true; }
+    else if(which==="C"){ if(on) which="E"; else{ startReadLast(now); return true; } }
+  }
+  switch(which){
+    case "N":
+      if(S.st==="NOTE") noteStop(now,false);
+      else if(S.st==="SQ"){ if(S.sqMode==="CONFIRM") startQuestions(now); else noteStart(now,"SQ"); }
+      else if(S.st==="IDLE"&&on) noteStart(now,"IDLE");
+      return true;
+    case "E":
+      if(S.st==="IDLE"&&on){ S.confirmSince=now; S.sqMode="CONFIRM"; setSt("SQ",now); haptic("ls"); }
+      else if(S.st==="SQ"){ if(S.sqMode==="QUESTIONS"){ stopPlayback(); sqNext(now); } else setSt("IDLE",now); }
+      return true;
+    case "H":
+      if(S.st==="IDLE"&&!on&&!SH.finishing) shiftStartDev(now);
+      return true;
+    default: break;
+  }
+  if(S.st==="NOTE") return true;
+  if(S.st==="SWAIT"){ SH.detached=true; toInfo("S_SAVED_OFFLINE",now); log("הסיכום ימשיך ברקע ויישלח כשהשרת יסיים","t"); return true; }
+  if(S.st==="SQ"){ stopPlayback(); setSt("IDLE",now); return true; }
+  return false;
+}
+/* runs every frame (shiftLoop in main.cpp) */
+function updateShift(now,dt){
+  const pocket=shiftPocket(now);
+  $("device").classList.toggle("pocket",pocket); $("pocketBar").hidden=!pocket;
+  if(SH.noteRec){ SH.lvAcc+=dt; if(SH.lvAcc>=100){ SH.lvAcc=0; SH.levels.push(S.level); if(SH.levels.length>64) SH.levels.shift(); } if(now-SH.noteStart>=90000) noteStop(now,true); }
+  if(S.st==="SQ"&&S.sqMode==="CONFIRM"&&now-S.confirmSince>6000) setSt("IDLE",now);
+  if(S.st==="SQ"&&S.sqMode==="QUESTIONS"&&now-S.lastActivity>180000){ stopPlayback(); setSt("IDLE",now); }
+  if(S.st==="SWAIT"&&now-S.swaitSince>2200) swaitDone(now);
+  if(SH.on&&!SH.noteRec&&S.st==="IDLE"&&SH.batt<20&&!SH.lowWarned){ SH.lowWarned=true; haptic("lsl"); log("סוללה נמוכה ("+SH.batt+"%): רטט התראה","e"); }
+  if(SH.batt>=25) SH.lowWarned=false;
+  let ch=false; const can=$("netSel").value==="ok";
+  SH.notes.forEach(n=>{ if(n.status==="queued"&&can&&now-n.t0>1200){ n.status="uploaded"; ch=true; } });
+  if(ch) renderNotes();
+  SH.uiAcc+=dt; if(SH.uiAcc>=250){ SH.uiAcc=0; const c=$("shPillClock"); if(c) c.lastChild.textContent=fmtHMS(SH.on?shiftElapsed(now)/1000:0); updateShiftUI(); }
+}
+const shiftStatus=()=>{
+  const used=SH.notes.reduce((a,n)=>a+n.dur,0), total=BOARD.touch?54000:312, free=Math.max(0,Math.floor(total-used));
+  const pend=SH.notes.filter(n=>n.status==="queued").length;
+  return {active:SH.on,finishing:SH.finishing,notes:SH.notes.length,pending:pend,online:$("netSel").value==="ok",backend:BOARD.touch?"SD":"Flash",freeSec:free,writeErr:SH.writeErr,summaryReady:SH.summaryReady,hasLast:!!SH.lastSummary};
+};
+
+/* =====================================================================================
+   INPUT (handleInput / onAction in main.cpp). Everything funnels into onAction('A'|'B'|'C'|'T'|'S'|'N'|'E'|'H').
+   ===================================================================================== */
+function resetTrip(){ S.trip={secs:0,brakes:0,turns:0,maxG:0,noiseSum:0,noiseN:0}; }
+function changeSetting(now){
+  const c=S.cfg;
+  switch(S.setSel){
+    case 0: c.bright=(c.bright+1)%3; break;
+    case 1: c.vol=(c.vol+1)%5; break;
+    case 2: c.sens=(c.sens+1)%3; $("sensSel").value=c.sens; break;
+    case 3: c.theme=(c.theme+1)%3; break;
+    case 4: c.voice=!c.voice; break;
+    case 5: log("שפה: בהדמיה עברית בלבד (במכשיר האמיתי אפשר גם אנגלית)","t"); break;
+    case 6: c.recipe=!c.recipe; log("הכפתור שואל: "+(c.recipe?"ספר מתכונים (החזק A ושאל)":"עוזר"),"s"); break;
+    case 7: if(!S.testRunning){ S.testRunning=true; S.testT0=now; S.testRes=""; S.testPicked=false; log("Test kit: מתחבר לדיבורית…","i"); } break;
+  }
+}
+function onAction(which){
+  const now=performance.now();
+  if(now-S.lastBtn<150) return; S.lastBtn=now; S.lastActivity=now;
+  if(S.crash){ cancelCrash(now); return; }
+  if(shiftAction(which,now)) return;
+  switch(S.st){
+    case "NOTE": case "SQ": case "SWAIT": return;
+    case "PALERT": case "FIND": toIdle(now); return;
+    case "ERROR": toIdle(now); return;
+    case "LISTEN": case "RECORD": if(which==="A"||which==="T") toIdle(now); return;
+    case "REPLY": toIdle(now); return;
+    case "THINK": return;
+    default: break;
+  }
+  const list=screensFor();
+  if(S.screen==="SET"&&S.btPicking){
+    const found=kitFound(), n=found.length;
+    if(which==="A"&&n) S.pickSel=(S.pickSel+1)%n;
+    else if(which==="B"||which==="S") S.btPicking=false;
+    else if(which==="C"&&n){ S.btPicking=false; S.testPicked=true; S.testRunning=true; S.testT0=now; S.testRes=""; log("נבחרה דיבורית: "+found[S.pickSel]+" (נשמרת ב-Preferences)","g"); }
+    return;
+  }
+  if(which==="S"){ S.screen=S.screen==="SET"?"FACE":"SET"; S.setSel=0; S.resetArmedAt=0; return; }
+  if(which==="B"){ const i=list.indexOf(S.screen); S.screen=list[(i+1)%(BOARD.touch?list.length:list.length-1)]; $("pScreen").textContent="מסך: "+SCREEN_NAMES[S.screen]; return; }
+  if(which==="A"||which==="T"){
+    if(S.screen==="SET"){ if(which==="A") S.setSel=(S.setSel+1)%setItems(); return; }
+    if(which==="T"&&S.screen!=="FACE") return;
+    startListen(now); return;
+  }
+  if(which==="C"){
+    switch(S.screen){
+      case "SET": changeSetting(now); break;
+      case "NOISE": S.bestQuiet=0; S.quietStreak=0; S.hist.fill(0); break;
+      case "G": S.trip.maxG=0; break;
+      case "TRIP": if(S.resetArmedAt&&now-S.resetArmedAt<3000){ resetTrip(); S.resetArmedAt=0; log("נסיעה אופסה","i"); } else S.resetArmedAt=now; break;
+      default: break;
+    }
+  }
+}
+const pttOk=()=>S.cfg.recipe&&S.st==="IDLE"&&S.screen!=="SET"&&S.screen!=="SHIFT"&&!SH.on&&!shiftPocket(performance.now());
+const shiftBusy=()=>SH.on||S.st==="SQ"||S.st==="NOTE";
+const shiftBusyP2=()=>shiftBusy()||S.st==="SWAIT";
+/* Core2: BtnA/B/C touch buttons. A: pressed => 'A' (or PTT), hold 500 ms on the Shift screen => 'H'. */
+function coreButton(b){ if(shiftPocket(performance.now())){ const n=performance.now(); if(n-SH.touchLog>1500){ SH.touchLog=n; log("מגע מנוטרל במצב כיס. רק כפתור הצד עובד","t"); } return; } onAction(b); }
+function coreSideClick(){ if(shiftBusy()) onAction("N"); else log("כפתור צד: אין משמרת פעילה (התחל משמרת: החזק A במסך משמרת)","t"); }
+function coreSideHold(){ if(shiftBusy()) onAction("E"); }
+/* Plus2: A (front), B (side), PWR (side) */
+function p2AClick(){ if(shiftBusyP2()) onAction("N"); else onAction("A"); }
+function p2AHold(){ if(shiftBusyP2()) onAction("E"); else if(S.screen==="SHIFT"&&S.st==="IDLE") onAction("H"); else if(S.screen==="SET"&&S.st==="IDLE") onAction("S"); else onAction("A"); }
+function p2BClick(){ onAction(S.screen==="SET"&&S.st==="IDLE"?"C":"B"); }
+function p2BHold(){ onAction("C"); }
+function p2PClick(){ onAction("S"); }
+function pttRelease(){ if(S.pttHeld) S.pttUpSince=performance.now(); }
+
+/* recipe book PTT + hold gestures bound to the front button */
+(()=>{
+  function bindFront(el,isCore){
+    let t=null,fired=false,down=false;
+    el.addEventListener("pointerdown",e=>{
+      audioCtx(); down=true; fired=false;
+      if(pttOk()){ startPtt(performance.now()); return; }
+      if(isCore){ coreButton("A"); }
+      t=setTimeout(()=>{ fired=true; t=null; if(isCore){ if(S.screen==="SHIFT"&&S.st==="IDLE"&&!SH.on&&!SH.finishing) onAction("H"); } else p2AHold(); },isCore?500:(shiftBusyP2()?1500:500));
+    });
+    const up=()=>{ if(t){ clearTimeout(t); t=null; } };
+    el.addEventListener("pointerup",()=>{ if(!down) return; down=false; const f=fired; up(); if(S.pttHeld){ pttRelease(); return; } if(!isCore&&!f) p2AClick(); });
+    el.addEventListener("pointerleave",()=>{ if(down&&S.pttHeld){ down=false; pttRelease(); } up(); });
+    el.addEventListener("pointercancel",()=>{ down=false; up(); pttRelease(); });
+    el.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" ") e.preventDefault(); });
+  }
+  bindFront($("bA"),true); bindFront($("pA"),false);
+})();
+$("bB").addEventListener("click",()=>{ audioCtx(); coreButton("B"); });
+$("bC").addEventListener("click",()=>{ audioCtx(); coreButton("C"); });
+function holdButton(el,onShort,onLong,ms){
+  let t=null,fired=false;
+  el.addEventListener("pointerdown",()=>{ audioCtx(); fired=false; t=setTimeout(()=>{ fired=true; t=null; onLong(); },ms||700); });
+  const up=()=>{ if(t){ clearTimeout(t); t=null; } };
+  el.addEventListener("pointerup",()=>{ const f=fired; up(); if(!f) onShort(); });
+  el.addEventListener("pointerleave",up); el.addEventListener("pointercancel",up);
+  el.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" ") e.preventDefault(); });
+  el.addEventListener("keyup",e=>{ if(e.key==="Enter"||e.key===" ") onShort(); });
+}
+holdButton($("pS"),coreSideClick,coreSideHold,700);
+holdButton($("pB"),p2BClick,p2BHold,500);
+$("pP").addEventListener("click",()=>{ audioCtx(); p2PClick(); });
+lcd.addEventListener("click",e=>{
+  if(!BOARD.touch) return;
+  audioCtx(); const r=lcd.getBoundingClientRect(), y=(e.clientY-r.top)/r.height*H, x=(e.clientX-r.left)/r.width*W;
+  if(shiftPocket(performance.now())){ coreButton("T"); return; }
+  if(y<200) onAction("T"); else onAction(x<W/3?"A":x<W*2/3?"B":"C");
+});
+document.addEventListener("keydown",e=>{
+  if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return; if(e.ctrlKey||e.metaKey||e.altKey||e.repeat) return;
+  const k=e.key.toLowerCase();
+  if(BOARD.touch){
+    if(k==="a"){ audioCtx(); if(pttOk()) startPtt(performance.now()); else coreButton("A"); }
+    else if(k==="b") coreButton("B"); else if(k==="c") coreButton("C");
+    else if(k==="n") coreSideClick(); else if(k==="e") coreSideHold();
+    else if(k==="h"){ if(S.screen==="SHIFT"&&S.st==="IDLE"&&!SH.on&&!SH.finishing) onAction("H"); }
+  }else{
+    if(k==="a"){ audioCtx(); if(pttOk()) startPtt(performance.now()); else p2AClick(); }
+    else if(k==="x"||k==="h") p2AHold(); else if(k==="b") p2BClick(); else if(k==="v") p2BHold(); else if(k==="p") p2PClick();
+  }
+});
+document.addEventListener("keyup",e=>{ if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return; if(e.key.toLowerCase()==="a") pttRelease(); });
+
+
+/* =====================================================================================
+   RENDERING (renderScreen / renderOverlay / renderCrash in main.cpp, Hebrew UI)
+   ===================================================================================== */
+const BAR={
+  face:()=>BOARD.touch?["S_TALK","S_NEXT","S_OPT"]:["S_TALK","S_NEXT","S_SET"],
+  reset:()=>BOARD.touch?["S_TALK","S_NEXT","S_RESET"]:["S_TALK","S_NEXT","S_SET"],
+  set:()=>BOARD.touch?["S_NEXT","S_NEXT","S_OPT"]:["S_NEXT","S_CHANGE","S_BACK"],
+  pick:()=>BOARD.touch?["S_NEXT","S_BACK","S_PICK"]:["S_NEXT","S_PICK","S_BACK"],
+  shIdle:()=>["S_START","S_NEXT","S_READ"], shOn:()=>["S_NOTE","S_NEXT","S_END"], peer:()=>["S_TALK","S_NEXT","S_DASH"]
+};
+function bottomBar(ids,k){
+  G.drawFastHLine(0,L.barY,L.W,k.acc);
+  say(T[ids[0]],L.W/6,L.barTextY,1,2,k.fg); say(T[ids[1]],L.W/2,L.barTextY,1,2,k.fg); say(T[ids[2]],(L.W*5+3)/6,L.barTextY,1,2,k.fg);
+}
+function noiseMood(){ if(S.level>75) return "angry"; if(S.level>60) return "worried"; if(S.quietStreak>30) return "happy"; return "neutral"; }
+function clockStr(){ const d=new Date(); return pad2(d.getHours())+":"+pad2(d.getMinutes()); }
+const cancelHint=()=>BOARD.touch?T.S_TAPCANCEL:T.S_PRESSCANCEL;
+const kitFound=()=>($("kitFound").value||"").split(/\n|,/).map(x=>x.trim()).filter(Boolean).slice(0,8);
+const kitLabelId=()=>{
+  if(S.testRunning) return "S_BT_CONN";
+  return ({ok:"S_BT_OK",nf:"S_BT_NF",to:"S_BT_TO",mem:"S_BT_MEM",fail:"S_BT_FAIL"})[S.testRes]||(BOARD.touch?"S_BT_IDLE":"S_BT_IDLE_BTN");
+};
+const peerOnline=()=>S.hub.valid&&S.hub.age<=90;
+
+function renderScreen(now,k){
+  const he=true; const b=[];
+  switch(S.screen){
+    case "FACE": {
+      const whoa=now<S.brakeFlashUntil, dim=now-S.lastActivity>20000&&!SH.on;
+      const m=whoa?"worried":dim?"sleep":noiseMood();
+      devFace(L.cx(),L.faceCy,L.faceS,m,now,k);
+      const net=$("netSel").value!=="nowifi";
+      say(clockStr(),L.right(),L.clockY,2,L.clockSz,k.fg,true);
+      say(net?"Wi-Fi":"-",8,L.wifiY,0,1,net?k.acc:k.fg,true);
+      if(S.cfg.voice) G.fillCircle(L.dotX,L.dotY,L.dotR,k.acc); else G.drawCircle(L.dotX,L.dotY,L.dotR,k.fg);
+      if(whoa) say(T.S_WHOA,L.cx(),L.whoaY,1,2,k.acc);
+      if(!(whoa&&L.compact)) bottomBar(BAR.face(),k);
+      break;
+    }
+    case "NOISE": {
+      say(T.S_NOISE,he?L.mirror(L.noiseTitleX):L.noiseTitleX,L.noiseTitleY,he?2:0,2,k.fg);
+      devFace(L.noiseFaceX,L.noiseFaceY,L.noiseFaceS,noiseMood(),now,k);
+      bigNum(Math.round(S.level),L.bigNumX,L.bigNumY,S.level>75?RED:S.level>60?AMBER2:k.fg);
+      say("dB",L.dbX,L.dbY,0,2,k.acc,true);
+      say(T.S_QUIET+" "+S.quietStreak+"s  ("+S.bestQuiet+"s)",L.quietX,L.quietY,1,1,k.fg);
+      const base=L.histBase; G.drawFastHLine(L.histX,base,60*L.histStep,k.acc);
+      for(let i=0;i<60;i++){
+        const v=S.hist[i], h=clamp(Math.floor((v-30)*1.3),0,L.histMaxH), c2=v>75?RED:v>60?AMBER2:k.acc;
+        if(v>1) G.fillRect(L.histX+i*L.histStep,base-h,L.histW,h,c2);
+      }
+      bottomBar(BAR.reset(),k); break;
+    }
+    case "G": {
+      const cx=he?L.mirror(L.gCx):L.gCx, cy=L.gCy, R=L.gR;
+      G.drawCircle(cx,cy,R,k.acc); G.drawCircle(cx,cy,R/2,k.fg); G.drawFastHLine(cx-R,cy,2*R,k.fg); G.drawFastVLine(cx,cy-R,2*R,k.fg);
+      S.trail.forEach((t,i)=>{ G.fillCircle(cx+clamp(t[0],-1,1)*R,cy-clamp(t[1],-1,1)*R,1+Math.floor(i/8),k.fg); });
+      const bx=cx+clamp(S.ax,-1,1)*R, by=cy-clamp(S.ay,-1,1)*R;
+      G.fillCircle(bx,by,L.gBall,now<S.brakeFlashUntil?"#ff3c28":k.acc);
+      const stat=(i,lab,val)=>{ const x=he?L.mirror(L.gStatX[i]):L.gStatX[i]; let a=L.gStatAlign[i]; if(he) a=a===0?2:0;
+        say(T[lab],x,L.gStatLabelY[i],a,1,k.fg); say(val,x,L.gStatValueY[i],a,2,k.acc,true); };
+      stat(0,"S_MAXG",S.trip.maxG.toFixed(2)+"g"); stat(1,"S_BRAKES",String(S.trip.brakes)); stat(2,"S_TURNS",String(S.trip.turns));
+      bottomBar(BAR.reset(),k); break;
+    }
+    case "TRIP": {
+      const t=S.trip; let y=L.rowY0;
+      row(y,T.S_TIME,fmtHMS(t.secs),k.fg,k.acc); y+=L.rowPitch;
+      row(y,T.S_BRAKES,String(t.brakes),k.fg,k.acc); y+=L.rowPitch;
+      row(y,T.S_TURNS,String(t.turns),k.fg,k.acc); y+=L.rowPitch;
+      row(y,T.S_MAXG,t.maxG.toFixed(2)+" g",k.fg,k.acc); y+=L.rowPitch;
+      row(y,T.S_AVGNOISE,(t.noiseN?Math.round(t.noiseSum/t.noiseN):0)+" dB",k.fg,k.acc); y+=L.rowPitch;
+      row(y,T.S_BESTQUIET,S.bestQuiet+" s",k.fg,k.acc);
+      if(S.resetArmedAt&&now-S.resetArmedAt<3000) say(T.S_PRESS_AGAIN,L.cx(),L.pressY,1,1,"#ff7850");
+      bottomBar(BAR.reset(),k); break;
+    }
+    case "SHIFT": {
+      const ss=shiftStatus(), on=ss.active||ss.finishing, red=RED;
+      const noteHint=BOARD.touch?T.S_SH_HINT_CORE:T.S_SH_HINT_STICK;
+      let y=L.rowY0;
+      if(on){
+        row(y,T.S_TIME,SH.on?fmtHMS(shiftElapsed(now)/1000):"--:--:--",k.fg,k.acc); y+=L.rowPitch;
+        row(y,T.S_SH_NOTES,String(ss.notes),k.fg,k.acc); y+=L.rowPitch;
+        row(y,T.S_SH_QUEUE,String(ss.pending)+((ss.pending&&!ss.online)?" "+T.S_SH_OFFLINE:""),k.fg,(ss.pending&&!ss.online)?AMBER:k.acc); y+=L.rowPitch;
+        row(y,T.S_SH_BATT,SH.batt+"%",k.fg,SH.batt<20?red:k.acc); y+=L.rowPitch;
+        if(!L.compact){ let s2=ss.backend+" "+Math.floor(ss.freeSec/60)+" min"; row(y,T.S_SH_STORE,s2,k.fg,ss.freeSec<120?red:k.acc); }
+        let warn=null, wc=red;
+        if(ss.writeErr) warn=T.S_SH_WRITEERR; else if(ss.freeSec<120) warn=T.S_SH_LOWSTORE; else if(SH.batt<20) warn=T.S_SH_LOWBATT;
+        else if(ss.finishing){ warn=T.S_SENDING; wc=k.acc; } else if(ss.summaryReady){ warn=T.S_SH_SUMREADY; wc=k.acc; }
+        if(warn){ say(warn,L.cx(),L.shHintY,1,1,wc); if(L.shHint2Y) say(noteHint,L.cx(),L.shHint2Y,1,1,k.fg); }
+        else say(noteHint,L.cx(),L.shHintY,1,1,k.fg);
+        bottomBar(BAR.shOn(),k);
+      }else{
+        row(y,T.S_SHIFT,T.S_SH_NONE,k.fg,k.acc); y+=L.rowPitch;
+        row(y,T.S_SH_LAST,ss.hasLast?T.S_SH_READY:T.S_SH_NOLAST,k.fg,k.acc); y+=L.rowPitch;
+        if(ss.pending) row(y,T.S_SH_QUEUE,String(ss.pending),k.fg,AMBER);
+        say(T.S_SH_HOLDA,L.cx(),L.shHintY,1,1,k.fg);
+        if(ss.summaryReady&&L.shHint2Y) say(T.S_SH_SUMREADY,L.cx(),L.shHint2Y,1,1,k.acc);
+        bottomBar(BAR.shIdle(),k);
+      }
+      break;
+    }
+    case "PEER": {
+      const pr=S.hub; let y=L.rowY0; const netOk=$("netSel").value==="ok";
+      row(y,T.S_LINK,netOk?T.S_ONLINE:T.S_SH_OFFLINE,k.fg,netOk?k.acc:AMBER); y+=L.rowPitch;
+      const age=pr.age, ps=!pr.valid?T.S_PEER_NONE:(age<=90?T.S_ONLINE:T.S_SH_OFFLINE+" "+(age<3600?Math.floor(age/60):99)+"m");
+      row(y,T.S_PEER,ps,k.fg,(pr.valid&&age<=90)?k.acc:AMBER); y+=L.rowPitch;
+      row(y,T.S_SH_BATT,pr.valid?pr.battery+"%":"--",k.fg,(pr.valid&&pr.battery<20)?RED:k.acc); y+=L.rowPitch;
+      row(y,T.S_SH_QUEUE,pr.valid?String(pr.notes):"--",k.fg,(pr.valid&&pr.notes>0)?AMBER:k.acc); y+=L.rowPitch;
+      row(y,T.S_SHIFT,pr.valid?(pr.shiftActive?T.S_ACTIVE:T.S_IDLE_W):T.S_DASH,k.fg,k.acc); y+=L.rowPitch;
+      row(y,T.S_INCAR,pr.inCar?T.S_YES:T.S_NO,k.fg,pr.inCar?k.acc:k.fg);
+      bottomBar(BAR.peer(),k); break;
+    }
+    case "SET": {
+      if(S.btPicking){
+        say(T.S_BT_PICK,L.cx(),L.pickTitleY,1,2,k.acc);
+        const found=kitFound(), n=found.length;
+        if(!n) say(T.S_BT_NODEV,L.cx(),L.H*5/12,1,L.compact?1:2,k.fg);
+        const vis=Math.min(L.pickVisible,8); let first=S.pickFirst||0;
+        if(S.pickSel<first) first=S.pickSel; if(S.pickSel>=first+vis) first=S.pickSel-vis+1; if(first<0||first>=Math.max(n,1)) first=0; S.pickFirst=first;
+        for(let r=0;r<vis&&first+r<n;r++){
+          const i=first+r, y=L.pickY0+r*L.pickPitch;
+          if(i===S.pickSel) G.drawRoundRect(2,y-3,L.W-4,L.pickRectH,5,k.acc);
+          say(found[i],10,y,0,1,i===S.pickSel?k.acc:k.fg);
+        }
+        bottomBar(BAR.pick(),k); break;
+      }
+      const labels=["S_BRIGHT","S_VOLUME","S_SENS","S_THEME","S_VOICE","S_LANG","S_PTT"]; if(S.fwA2dp) labels.push("S_TESTKIT");
+      const n=labels.length, pitch=n>6?L.setPitch7:L.setPitch6, vis=Math.min(L.setVisible,n); let first=S.setFirst||0;
+      if(S.setSel<first) first=S.setSel; if(S.setSel>=first+vis) first=S.setSel-vis+1; S.setFirst=first;
+      for(let r=0;r<vis;r++){
+        const i=first+r, y=L.setY0+r*pitch;
+        if(i===S.setSel) G.drawRoundRect(2,y-L.setRectDy,L.W-4,pitch-3,6,k.acc);
+        let v="";
+        switch(i){
+          case 0: v=Math.floor(BRIGHT_LV[S.cfg.bright]*100/255)+"%"; break;
+          case 1: v=Math.floor(VOL_LV[S.cfg.vol]*100/255)+"%"; break;
+          case 2: v=T[["S_LOW","S_MED","S_HIGH"][S.cfg.sens]]; break;
+          case 3: v=T[["S_CYAN","S_AMBER","S_GREEN"][S.cfg.theme]]; break;
+          case 4: v=S.cfg.voice?T.S_ON:T.S_OFF; break;
+          case 5: v=T.S_LANG_HE; break;
+          case 6: v=S.cfg.recipe?T.S_PTT_RECIPES:T.S_PTT_ASSIST; break;
+          case 7: v=T[kitLabelId()]; break;
+        }
+        row(y,T[labels[i]],v,i===S.setSel?k.acc:k.fg,k.fg);
+      }
+      bottomBar(BAR.set(),k); break;
+    }
+  }
+}
+function waveBars(color,k){
+  for(let i=0;i<64;i++){ const h=2+S.wave[i]*L.waveMaxH; G.fillRect(L.waveX+i*L.waveStep,L.waveBase-h/2,L.waveW,h,color); }
+}
+function renderOverlay(now,k){
+  switch(S.st){
+    case "LISTEN":
+      devFace(L.cx(),L.listenCy,L.faceS,"listen",now,k); say(T.S_LISTENING,L.cx(),L.statusY,1,2,k.acc); break;
+    case "RECORD":
+      devFace(L.cx(),L.recFaceY,L.recFaceS,"listen",now,k); waveBars(S.speechSeen||S.pttHeld?k.acc:k.fg,k);
+      say(S.pttHeld?T.S_RCP_HOLD:T.S_RECORDING,L.margin,L.statusY,0,2,k.fg);
+      say(((now-S.recStart)/1000).toFixed(1)+"s",L.right(),L.statusY,2,2,k.acc,true); break;
+    case "THINK":
+      devFace(L.cx(),L.thinkCy,L.faceS,"think",now,k); say(T.S_THINKING,L.cx(),L.statusY,1,2,k.acc); break;
+    case "REPLY": {
+      devFace(L.replyFaceX,L.replyFaceY,L.replyFaceS,S.speaking?"talk":S.replyMood,now,k,{mouth:S.mouth});
+      const lh=L.replyLineHe, vis=Math.floor((L.replyBottom-L.replyTextY)/lh), total=S.replyLines.length;
+      let scroll=0; if(total>vis) scroll=clamp(Math.floor((now-S.replySince-1500)/1800),0,total-vis);
+      for(let i=0;i<vis&&scroll+i<total;i++) say(S.replyLines[scroll+i],L.right(),L.replyTextY+i*lh,2,2,k.fg);
+      break;
+    }
+    case "NOTE":
+      devFace(L.cx(),L.recFaceY,L.recFaceS,"listen",now,k); waveBars("#ff5a46",k);
+      if(Math.floor(now/500)%2) G.fillCircle(L.margin+4,L.statusY+7,5,"#ff3c28");
+      say(T.S_REC_NOTE,L.margin+14,L.statusY,0,2,k.fg);
+      say(Math.floor((now-S.stSince)/1000)+"s",L.right(),L.statusY,2,2,k.acc,true); break;
+    case "SQ": {
+      const confirmHint=BOARD.touch?T.S_ENDQ_CORE:T.S_ENDQ_STICK, qHint=BOARD.touch?T.S_Q_HINT_CORE:T.S_Q_HINT_STICK;
+      if(S.sqMode==="CONFIRM"){ say(T.S_ENDQ,L.cx(),L.H*2/5-8,1,2,k.acc); say(confirmHint,L.cx(),L.H*3/5-4,1,L.compact?1:2,k.fg); }
+      else{
+        say((S.sqIdx+1)+"/"+S.sqQ.length,L.right(),L.sqTitleY,2,2,k.acc,true);
+        const lh=L.replyLineHe, vis=Math.floor((L.sqHintY-L.sqTextY-4)/lh);
+        for(let i=0;i<vis&&i<S.replyLines.length;i++) say(S.replyLines[i],L.right(),L.sqTextY+i*lh,2,2,k.fg);
+        say(qHint,L.cx(),L.sqHintY,1,1,k.acc);
+      }
+      break;
+    }
+    case "SWAIT": {
+      devFace(L.cx(),L.thinkCy,L.faceS,"think",now,k);
+      const ss=shiftStatus(); say(ss.pending?T.S_SENDING+" "+ss.pending:T.S_SUMMARIZING,L.cx(),L.statusY,1,2,k.acc); break;
+    }
+    case "PALERT": {
+      G.fillScreen(Math.floor(now/400)%2?"#c80000":"#6e0000");
+      say(T.S_CAR_ALERT,L.cx(),L.crashY1,1,L.compact?1:2,WHITE);
+      if(S.palertG>=0) say(S.palertG.toFixed(1)+" g",L.cx(),L.crashY2,1,2,WHITE,true);
+      say(cancelHint(),L.cx(),L.crashHintY,1,2,WHITE); break;
+    }
+    case "FIND":
+      devFace(L.cx(),L.thinkCy,L.faceS,"happy",now,k); say(T.S_FINDME,L.cx(),L.statusY,1,2,k.acc); break;
+    case "ERROR": {
+      devFace(L.cx(),L.errCy,L.errS,S.errInfo?"neutral":"confused",now,k);
+      const ec=S.errInfo?k.acc:ORANGE;
+      /* the Hebrew UI never splits (only the English UI splits at the nearest space) */
+      say(S.errText,L.cx(),L.errY,1,2,ec); break;
+    }
+  }
+}
+function renderCrash(now,k){
+  G.fillScreen(Math.floor(now/400)%2?"#c80000":"#6e0000");
+  const left=15-Math.floor((now-S.crash.t0)/1000);
+  say(T.S_IMPACT,L.cx(),L.crashY1,1,2,WHITE);
+  if(left>0){ say(T.S_AREYOUOK,L.cx(),L.crashY2,1,2,WHITE); bigNum(left,L.cx(),L.crashNumY,WHITE); say(cancelHint(),L.cx(),L.crashHintY,1,2,WHITE); }
+  else{ say(T.S_SOS,L.cx(),L.crashSosY,1,2,WHITE); say(cancelHint(),L.cx(),L.crashHintY,1,2,WHITE); }
+}
+function drawDevice(now){
+  const k=THEMES[S.cfg.theme];
+  G.fillScreen(k.bg);
+  if(shiftPocket(now)){ G.fillScreen("#000"); return; }          /* pocket mode: screen off, nothing drawn */
+  if(S.crash) renderCrash(now,k); else if(S.st==="IDLE") renderScreen(now,k); else renderOverlay(now,k);
+  let want=BRIGHT_LV[S.cfg.bright]/255; if(S.st==="IDLE"&&now-S.lastActivity>20000) want=Math.min(want,24/255);
+  const alpha=(1-want)*0.55; if(alpha>0.02){ ctx.fillStyle="rgba(0,0,0,"+alpha.toFixed(3)+")"; ctx.fillRect(0,0,W,H); }
+}
+
+/* =====================================================================================
+   GALLERY: every mood of the selected character, side by side (same drawChar() as the device)
+   ===================================================================================== */
+const GAL_MOODS=MOODS.concat([["chef","שף (במשמרת)"]]);
+let galCanvases=null;
+function buildGallery(){
+  const host=$("galGrid"); host.textContent=""; galCanvases=[];
+  GAL_MOODS.forEach(m=>{
+    const fig=document.createElement("figure"), cv=document.createElement("canvas"), cap=document.createElement("figcaption");
+    cv.width=320; cv.height=240; cv.setAttribute("aria-label","מצב: "+m[1]); cap.textContent=m[1]; fig.append(cv,cap); host.appendChild(fig); galCanvases.push({cv,id:m[0]});
+  });
+}
+function drawGallery(now){
+  if(!galCanvases) return; const main=ctx, k=THEMES[S.cfg.theme];
+  galCanvases.forEach(g=>{
+    const c=g.cv.getContext("2d"); ctx=c; c.setTransform(1,0,0,1,0,0);
+    const sv=W,sh=H; W=320; H=240; G.fillScreen(k.bg);
+    const mood=g.id==="chef"?"happy":g.id, o={mouth:0.5+0.5*Math.sin(now/130),chef:g.id==="chef"};
+    drawChar(CHAR,160,100,1.0,mood,now,k,o);
+    W=sv; H=sh;
+  });
+  ctx=main;
+}
+
+
+/* =====================================================================================
+   PAGE PANELS: shift card, summary preview, hub, recipe book, test kit, character picker
+   ===================================================================================== */
 function buildSummary(){
   const d0=SH.startDate, d1=new Date(d0.getTime()+SH.endElapsed);
   const day=d0.toLocaleDateString("he-IL",{weekday:"long"}), date=d0.toLocaleDateString("he-IL");
@@ -1179,195 +1828,139 @@ function renderResult(){
   const mk=(t,ok)=>{ const s=document.createElement("span"); s.className="pill "+(ok?"on":"rec"); const i=document.createElement("i"); const b=document.createElement("b"); b.textContent=t; s.append(i,b); dv.appendChild(s); };
   mk("מייל נשלח ✓",true); mk(r.delivered.docs?"Google Doc נוצר ✓":"Google Doc נכשל, הסיכום נשמר",!!r.delivered.docs); mk("הקראה: audio_url מוכן",true);
 }
+
 function updateShiftUI(){
-  const on=SH.on, ph=SH.phase;
-  const names={off:"כבויה",run:"פעילה",qa:"שאלות סיכום",follow:"שאלות המשך",think:"מסכם…",done:"הושלמה"};
-  const set=(id,cls,t)=>{ const el=$(id); el.className="pill"+(cls?" "+cls:""); el.lastChild.textContent=t; };
-  set("shPillState",on?"on":"","משמרת: "+names[ph]);
+  const set=(id,cls,t)=>{ const el=$(id); if(!el) return; el.className="pill"+(cls?" "+cls:""); el.lastChild.textContent=t; };
+  const inQ=S.st==="SQ"&&S.sqMode==="QUESTIONS";
+  const phase=SH.on?(S.st==="SQ"?(inQ?"שאלות סיכום":"אישור סיום"):S.st==="NOTE"?"מקליט הערה":"פעילה"):SH.finishing?(inQ?"שאלות המשך":S.st==="SWAIT"?"מסכם…":"מסכם…"):(SH.lastSummary?"הושלמה":"כבויה");
+  set("shPillState",SH.on||SH.finishing?"on":"","משמרת: "+phase);
   set("shPillRec",SH.noteRec?"rec":"",SH.noteRec?"הקלטה: מקליט עכשיו":"הקלטה: לא מקליט");
-  set("shPillPocket",SH.pocket?"on":"",SH.pocket?"כיס: כן (מסך כבוי, מגע מנוטרל)":"כיס: לא");
-  $("shStart").disabled=on; $("shEnd").disabled=!(on&&ph==="run");
-  const rec=on&&(ph==="run"||ph==="qa"||ph==="follow");
-  $("shNote").disabled=!rec; $("shNote").textContent=SH.noteRec?"עצור הערה":(ph==="qa"||ph==="follow")?"ענה (כמו כפתור הצד)":"הערה (כמו כפתור הצד)";
-  $("shPocketNow").disabled=!(on&&ph==="run"&&!SH.pocket); $("shWake").disabled=!(on&&SH.pocket); $("shSkip").disabled=!on;
+  const pocket=shiftPocket(performance.now());
+  set("shPillPocket",pocket?"on":"",pocket?"כיס: כן (מסך כבוי, מגע מנוטרל)":"כיס: לא");
+  const idle=S.st==="IDLE";
+  $("shStart").disabled=SH.on||SH.finishing||!idle;
+  $("shEnd").disabled=!(SH.on&&idle);
+  $("shNote").disabled=!((SH.on&&(idle||S.st==="NOTE"))||(S.st==="SQ"));
+  $("shNote").textContent=SH.noteRec?"עצור הערה (כפתור הצד)":inQ?"ענה (כפתור הצד)":S.st==="SQ"?"התחל שאלות (כפתור הצד)":"הערה (כפתור הצד)";
+  $("shPocketNow").disabled=!(SH.on&&!pocket); $("shWake").disabled=!pocket; $("shSkip").disabled=!SH.on;
   const qb=$("qBanner");
-  if(on&&(ph==="qa"||ph==="follow")){ qb.hidden=false; qb.textContent=(ph==="follow"?"שאלת המשך ":"שאלה ")+(SH.q+1)+"/"+SH.qList.length+": "+SH.qList[SH.q]+(SH.noteRec?"  ·  מקליט תשובה…":"  ·  לחץ על כפתור ההערה כדי לענות"); }
-  else if(on&&ph==="think"){ qb.hidden=false; qb.textContent="ה-bridge מתמלל ומסכם…"; }
+  if(inQ){ qb.hidden=false; qb.textContent=(S.sqFollow?"שאלת המשך ":"שאלה ")+(S.sqIdx+1)+"/"+S.sqQ.length+": "+S.sqQ[S.sqIdx]+(SH.noteRec?"  ·  מקליט תשובה…":"  ·  לחץ על כפתור הצד כדי לענות, החזק כדי לדלג"); }
+  else if(S.st==="SQ"){ qb.hidden=false; qb.textContent="לסיים משמרת? לחץ על כפתור הצד לאישור, או המתן 6 שניות לביטול"; }
+  else if(S.st==="SWAIT"){ qb.hidden=false; qb.textContent="ה-bridge מתמלל ומסכם… (לחיצה על כפתור ממשיכה ברקע)"; }
   else qb.hidden=true;
-  $("pScreen").textContent=on?"מסך: משמרת":"מסך: "+SCREENS[S.screen];
+  $("pScreen").textContent="מסך: "+SCREEN_NAMES[S.screen];
 }
-function updateShift(now,dt){
-  if(!SH.on) return;
-  const ph=SH.phase;
-  if(S.crash&&SH.pocket) setPocket(false,now);
-  if(SH.noteRec){
-    SH.lvAcc+=dt; if(SH.lvAcc>=100){ SH.lvAcc=0; SH.levels.push(S.level); if(SH.levels.length>64) SH.levels.shift(); }
-    if(now-SH.noteStart>=90000) stopNote(now,true);
-  }
-  if(ph==="think"&&now-SH.thinkAt>2200) finishThink(now);
-  if(!SH.pocket&&!SH.noteRec&&(ph==="run"||ph==="qa"||ph==="follow")&&now-SH.lastAct>10000&&!S.crash) setPocket(true,now);
-  if(SH.batt<20&&!SH.lowWarned){ SH.lowWarned=true; haptic([100,100,100]); log("סוללה נמוכה ("+SH.batt+"%): רטט התראה","e"); }
-  if(SH.batt>=25) SH.lowWarned=false;
-  let ch=false; const can=$("netSel").value==="ok";
-  SH.notes.forEach(n=>{ if(n.status==="queued"&&can&&now-n.t0>1200){ n.status="uploaded"; ch=true; } });
-  if(ch) renderNotes();
-  SH.uiAcc+=dt; if(SH.uiAcc>=250){ SH.uiAcc=0; $("shPillClock").lastChild.textContent=fmtT(shiftElapsed(now)/1000); }
-}
-/* Pocket mode: the physical button keeps working; touch is disabled. */
-function shiftPress(b,now){
-  const ph=SH.phase;
-  if(BOARD.touch){
-    if(SH.pocket){ if(now-SH.touchLog>1500){ SH.touchLog=now; log("מגע מנוטרל במצב כיס. כפתור הצד ממשיך לעבוד (לחיצה ארוכה מעירה את המסך)","t"); } return; }
-    SH.lastAct=now;
-    if(ph==="run"){ if(b==="A") setPocket(true,now); else if(b==="C") shiftEnd(now); }
-    else if(ph==="qa"||ph==="follow"){ if(b==="A"&&!SH.noteRec){ log("דילוג על שאלה","t"); advanceQ(now); } else if(b==="B") readQuestion(now); }
-    else if(ph==="done"){ if(b==="A") replaySummary(); else if(b==="C") shiftClose(); }
-  }else{
-    if(b==="A"){ noteToggle(now); return; }
-    if(b==="L"){ sideLong(); return; }
-    if(SH.pocket){ setPocket(false,now); return; }
-    SH.lastAct=now;
-    if(ph==="run"){ if(b==="B") setPocket(true,now); }
-    else if(ph==="qa"||ph==="follow"){ if(b==="B"&&!SH.noteRec){ log("דילוג על שאלה","t"); advanceQ(now); } else if(b==="P") readQuestion(now); }
-    else if(ph==="done"){ if(b==="P") shiftClose(); }
-  }
-}
-function sideShort(){
-  const now=performance.now(); audioCtx();
-  if(!SH.on){ beep(300,80); log("כפתור צד: אין משמרת פעילה. החזק לחיצה ארוכה כדי להתחיל","t"); return; }
-  noteToggle(now);
-}
-function sideLong(){
-  const now=performance.now(); audioCtx();
-  if(!SH.on){ shiftStart(now); return; }
-  if(SH.pocket){ setPocket(false,now); return; }
-  SH.lastAct=now;
-  if(SH.phase==="run") shiftEnd(now); else if(SH.phase==="done") shiftClose();
-}
-function holdButton(el,onShort,onLong){
-  let t=null,fired=false;
-  el.addEventListener("pointerdown",()=>{ fired=false; t=setTimeout(()=>{ fired=true; t=null; onLong(); },700); });
-  const up=()=>{ if(t){ clearTimeout(t); t=null; } };
-  el.addEventListener("pointerup",()=>{ const f=fired; up(); if(!f) onShort(); });
-  el.addEventListener("pointerleave",up); el.addEventListener("pointercancel",up);
-  el.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" ") e.preventDefault(); });
-  el.addEventListener("keyup",e=>{ if(e.key==="Enter"||e.key===" ") onShort(); });
-}
-holdButton($("pS"),sideShort,sideLong);
-holdButton($("pP"),()=>press("P"),()=>{ if(SH.on) press("P"); else shiftStart(performance.now()); });
-$("shStart").onclick=()=>shiftStart(performance.now());
-$("shNote").onclick=()=>{ audioCtx(); noteToggle(performance.now()); };
-$("shEnd").onclick=()=>{ audioCtx(); shiftEnd(performance.now()); };
-$("shPocketNow").onclick=()=>setPocket(true,performance.now());
-$("shWake").onclick=()=>setPocket(false,performance.now());
+$("shStart").onclick=()=>{ audioCtx(); S.screen="SHIFT"; onAction("H"); };
+$("shNote").onclick=()=>{ audioCtx(); if(BOARD.touch) coreSideClick(); else p2AClick(); };
+$("shEnd").onclick=()=>{ audioCtx(); if(BOARD.touch) coreSideHold(); else p2AHold(); };
+$("shPocketNow").onclick=()=>{ S.lastActivity=performance.now()-11000; };
+$("shWake").onclick=()=>{ S.lastActivity=performance.now(); log("הערה: כפתור הצד בכיס מקליט הערה ומדליק את המסך ל-10 שניות","t"); };
 $("shSkip").onclick=()=>{ SH.offset+=3600000; log("הטיימר קודם בשעה (להדגמת משמרת ארוכה)","t"); };
 $("shBatt").oninput=e=>{ SH.batt=+e.target.value; $("battO").textContent=SH.batt+"%"; };
-$("readBtn").onclick=()=>{ audioCtx(); if(SH.result) deviceSpeak(SH.result.spoken); };
-$("stopRead").onclick=()=>{ try{ if("speechSynthesis" in window) speechSynthesis.cancel(); }catch(e){} };
+$("readBtn").onclick=()=>{ audioCtx(); if(SH.result) speakText(SH.result.spoken); };
+$("stopRead").onclick=stopSpeechAudio;
 NOTE_SAMPLES.forEach(s=>{ const b=document.createElement("button"); b.className="chip"; b.textContent=s.t; b.onclick=()=>{ $("noteText").value=s.t; }; $("noteChips").appendChild(b); });
-renderNotes(); updateShiftUI();
+renderNotes();
 
-/* shift screen on the device */
-function drawBatt(x,y,w,h,pct){
-  ctx.strokeStyle=DIM; ctx.lineWidth=1.5; rr(x,y,w,h,2); ctx.stroke();
-  ctx.fillStyle=pct<20?"#ff5d5d":pct<40?"#ffcf4a":"#46d17a"; ctx.fillRect(x+2,y+2,(w-4)*clamp(pct/100,0,1),h-4); ctx.fillRect(x+w,y+h*0.3,2,h*0.4);
+/* ---------- hub (car <-> pocket) ---------- */
+function hubSync(){
+  const h=S.hub; h.valid=$("hubSeen").checked; h.battery=+$("hubBatt").value; h.notes=+$("hubNotes").value; h.shiftActive=$("hubShift").checked; h.inCar=$("hubInCar").checked; h.age=+$("hubAge").value;
+  $("hubBattO").textContent=h.battery+"%"; $("hubNotesO").textContent=h.notes; $("hubAgeO").textContent=h.age<=90?h.age+" שנ׳ (מחובר)":Math.floor(h.age/60)+" דק׳ (לא מחובר)";
 }
-function tile(x,y,w,h,label,val,col,batt){
-  ctx.fillStyle="#131b24"; rr(x,y,w,h,C?6:10); ctx.fill();
-  txt(label,x+8,y+(C?11:16),C?8:9,DIM,"left","700"); txt(val,x+8,y+h-(C?6:10),C?15:20,col||FG,"left","700");
-  if(batt!==undefined) drawBatt(x+w-(C?30:42),y+h-(C?18:26),C?20:30,C?10:14,batt);
+["hubSeen","hubBatt","hubNotes","hubShift","hubInCar","hubAge"].forEach(id=>$(id).addEventListener("input",hubSync));
+hubSync();
+$("hubCrash").onclick=()=>{ const now=performance.now(); if(S.crash) S.crash=null; S.palertG=4.8; S.palertUntil=now+30000; S.lastActivity=now;
+  $("hubJson").textContent=JSON.stringify({id:"c-"+Math.floor(now),type:"vibrate",pattern:"crash",g:4.8},null,1);
+  log("Hub ← פקודת vibrate/crash מהרכב. כל כפתור משתיק.","e"); setSt("PALERT",now); };
+$("hubFind").onclick=()=>{ const now=performance.now(); S.findUntil=now+10000; S.lastActivity=now;
+  $("hubJson").textContent=JSON.stringify({id:"f-"+Math.floor(now),type:"find_me",duration_s:10},null,1);
+  log("Hub ← פקודת find_me ('איפה הכיס שלי?'). כל כפתור משתיק.","i"); setSt("FIND",now); };
+$("hubRead").onclick=()=>{ const now=performance.now(); $("hubInCar").checked=true; hubSync();
+  $("hubJson").textContent=JSON.stringify({id:"r-"+Math.floor(now),type:"read_summary",shift_id:"demo",audio_urls:["…/shift/audio/demo-1.wav"],spoken:"…"},null,1);
+  log("Hub: שני המכשירים על ה-SSID של הרכב → in_car → פקודת read_summary לרכב","g");
+  if(S.st!=="IDLE") { log("המכשיר עסוק: הפקודה נשארת בלי ack ותישלח שוב","t"); return; }
+  startReadLast(now); };
+
+/* ---------- recipe book ---------- */
+["מה הטמפרטורה ללזניה?","כמה זמן אופים פוקאצ'ה?","מה המצרכים של ניוקי?","מה האלרגנים בפנקוטה?","כמה מנות יוצאות מלזניה?","איך מכינים טירמיסו?"].forEach(q=>{
+  const b=document.createElement("button"); b.className="chip"; b.textContent=q; b.onclick=()=>{ $("rcpQ").value=q; }; $("rcpChips").appendChild(b);
+});
+$("rcpAsk").onclick=()=>{ audioCtx(); const now=performance.now(); if(S.st!=="IDLE"||S.screen==="SET"||S.screen==="SHIFT"){ log("מצב מתכונים: עברו למסך הפנים/רעש/G/נסיעה כשהמכשיר לא עסוק","t"); return; }
+  if(!S.cfg.recipe){ S.cfg.recipe=true; log("הוגדר: הכפתור שואל ספר מתכונים","s"); }
+  startPtt(now); setTimeout(()=>{ S.pttUpSince=performance.now(); },1600); };
+
+/* ---------- test kit + A2DP build ---------- */
+$("fwA2dp").onchange=e=>{ S.fwA2dp=e.target.checked; if(S.setSel>=setItems()) S.setSel=0; setAudioPill(); };
+$("kitRes").onchange=()=>{ S.testRes=""; S.testPicked=false; };
+
+/* ---------- character picker ---------- */
+function setChar(id,silent){
+  if(!FACE_FN[id]) id="bean"; CHAR=id;
+  document.querySelectorAll("[data-char]").forEach(b=>b.setAttribute("aria-checked",b.dataset.char===id?"true":"false"));
+  const v=VARIANTS.find(x=>x.id===id); $("galName").textContent=v.name+" · "+v.sub;
+  if(!silent){ try{ localStorage.setItem("dashie.char",id); }catch(e){} log("דמות → "+v.name,"s"); }
 }
-function shiftFoot(){
-  const ph=SH.phase;
-  if(BOARD.touch){
-    if(ph==="run") return ["POCKET","","END"];
-    if(ph==="qa"||ph==="follow") return ["SKIP","REPEAT",""];
-    if(ph==="done") return ["REPLAY","","CLOSE"];
-    return ["","",""];
-  }
-  if(ph==="run") return ["A NOTE","B POCKET","HOLD A: END"];
-  if(ph==="qa"||ph==="follow") return ["A ANSWER","B SKIP","PWR AGAIN"];
-  if(ph==="done") return ["A READ","","PWR CLOSE"];
-  return ["","",""];
+document.querySelectorAll("[data-char]").forEach(b=>b.addEventListener("click",()=>setChar(b.dataset.char)));
+$("chefOn").onchange=e=>{ S.chefOn=e.target.checked; };
+$("heFont").onchange=()=>{ applyBoardGeometry(); };
+
+/* ---------- misc controls ---------- */
+$("sensSel").onchange=e=>{ S.cfg.sens=+e.target.value; };
+$("micBtn").onclick=()=>{ audioCtx(); if(!S.micOn) enableMic(); };
+$("shoutBtn").onclick=()=>{ audioCtx(); S.shoutUntil=performance.now()+420; };
+$("dblBtn").onclick=()=>{ audioCtx(); const n=performance.now(); S.shoutUntil=n+420; setTimeout(()=>{ S.shoutUntil=performance.now()+420; },700); };
+$("noise").oninput=e=>{ $("noiseO").textContent=e.target.value+" dB"; };
+$("speed").oninput=e=>{ S.speed=+e.target.value; $("spdO").textContent=S.speed+" קמ״ש"; $("pDrive").textContent=driving()?"בנסיעה":"חניה"; };
+$("axS").oninput=e=>{ S.sax=e.target.value/100; $("axO").textContent=S.sax.toFixed(2)+"g"; };
+$("ayS").oninput=e=>{ S.say=e.target.value/100; $("ayO").textContent=S.say.toFixed(2)+"g"; };
+$("brakeBtn").onclick=()=>impulse(0,-0.7,700);
+$("turnBtn").onclick=()=>impulse(0.65,0,800);
+$("crashBtn").onclick=()=>impulse(0,-5.5,120);
+SAMPLES.forEach(s=>{ const b=document.createElement("button"); b.className="chip"; b.textContent=s; b.onclick=()=>{ $("said").value=s; }; $("chips").appendChild(b); });
+const pad=$("pad"), dot=$("padDot"); let dragging=false;
+function padMove(e){ const r=pad.getBoundingClientRect(); const x=clamp((e.clientX-r.left)/r.width*2-1,-1,1), y=clamp((e.clientY-r.top)/r.height*2-1,-1,1); S.padAx=x*0.9; S.padAy=-y*0.9; dot.style.left=(50+x*40)+"%"; dot.style.top=(50+y*40)+"%"; }
+pad.addEventListener("pointerdown",e=>{ dragging=true; pad.setPointerCapture(e.pointerId); padMove(e); });
+pad.addEventListener("pointermove",e=>{ if(dragging) padMove(e); });
+const padEnd=()=>{ dragging=false; S.padAx=0; S.padAy=0; dot.style.left="50%"; dot.style.top="50%"; };
+pad.addEventListener("pointerup",padEnd); pad.addEventListener("pointercancel",padEnd);
+
+/* ---------- live meter ---------- */
+const mc=$("meter"), mx=mc.getContext("2d");
+function cssv(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function drawMeter(){
+  const w=mc.width,h=mc.height; mx.clearRect(0,0,w,h);
+  const lo=30,hi=110, Y=v=>h-6-(clamp(v,lo,hi)-lo)/(hi-lo)*(h-12);
+  mx.strokeStyle=cssv("--line"); mx.lineWidth=1; mx.font="16px monospace"; mx.fillStyle=cssv("--muted"); mx.textAlign="left";
+  [40,60,80,100].forEach(v=>{ mx.beginPath(); mx.moveTo(0,Y(v)); mx.lineTo(w,Y(v)); mx.stroke(); mx.fillText(v,4,Y(v)-3); });
+  const n=S.samples.length; if(!n) return; const off=200-n;
+  const line=(idx,color,wd)=>{ mx.strokeStyle=color; mx.lineWidth=wd; mx.beginPath(); S.samples.forEach((s,i)=>{ const x=(off+i)/199*w, y=Y(s[idx]); i?mx.lineTo(x,y):mx.moveTo(x,y); }); mx.stroke(); };
+  line(1,cssv("--good"),2); line(2,cssv("--bad"),2); line(0,cssv("--info"),3);
 }
-function drawRecWave(now,y0,hmax,bw){
-  const L=SH.levels, n=Math.min(L.length,64);
-  for(let i=0;i<n;i++){ const v=clamp((L[L.length-n+i]-S.floor)/30,0.04,1), h=v*hmax; ctx.fillStyle=accent(); ctx.fillRect(W/2-n*bw/2+i*bw,y0-h/2,bw-1,h); }
-}
-function drawShift(now){
-  const ph=SH.phase, el=shiftElapsed(now), ch=H-HH-FH, mood=currentMood(now);
-  if(ph==="run"&&!SH.noteRec){
-    if(!C){
-      drawFace(58,80,0.32,mood,{eh:66,mouth:true,look:true});
-      txt("SHIFT TIME",112,52,10,DIM,"left","700"); txt(fmtT(el),112,92,34,FG,"left","700");
-      tile(14,122,140,54,"NOTES",String(SH.notes.length),accent());
-      tile(166,122,140,54,"BATTERY",SH.batt+"%",SH.batt<20?"#ff7a7a":FG,SH.batt);
-      txt("SIDE BUTTON = RECORD NOTE",W/2,198,10,DIM,"center","600");
-    }else{
-      drawFace(28,HH+26,0.2,mood,{eh:66,mouth:false,look:true});
-      txt("SHIFT TIME",62,HH+14,8,DIM,"left","700"); txt(fmtT(el),62,HH+38,24,FG,"left","700");
-      tile(8,HH+48,108,32,"NOTES",String(SH.notes.length),accent());
-      tile(124,HH+48,108,32,"BATTERY",SH.batt+"%",SH.batt<20?"#ff7a7a":FG,SH.batt);
-      txt("PRESS A = RECORD NOTE",W/2,H-FH-6,9,DIM,"center","600");
-    }
-  }else if(SH.noteRec){
-    const e=(now-SH.noteStart)/1000, rec=Math.floor(now/400)%2, ry=C?HH+14:52;
-    if(ph==="qa"||ph==="follow"){
-      txt("ANSWER "+(SH.q+1)+"/"+SH.qList.length,W/2,HH+(C?12:24),C?9:11,accent(),"center","700");
-    }
-    ctx.fillStyle=rec?"#ff5d5d":"#5a2a2a"; ctx.beginPath(); ctx.arc(C?14:24,C?HH+30:ry+(ph==="qa"||ph==="follow"?18:0),C?5:6,0,7); ctx.fill();
-    const ty=C?HH+34:ry+(ph==="qa"||ph==="follow"?22:4);
-    txt("REC "+fmtMS(e)+" / 01:30",C?26:38,ty,C?10:12,FG,"left","700");
-    drawRecWave(now,C?HH+ch/2+14:150,C?34:64,C?3:4);
-    const bx=C?12:24, bwid=W-2*bx, by=H-FH-(C?16:34);
-    ctx.fillStyle="rgba(255,255,255,.12)"; ctx.fillRect(bx,by,bwid,4); ctx.fillStyle="#ff5d5d"; ctx.fillRect(bx,by,bwid*clamp(e/90,0,1),4);
-    txt(BOARD.touch?"PRESS SIDE BUTTON TO STOP":"PRESS A TO STOP",W/2,H-FH-(C?5:12),C?9:10,DIM,"center","600");
-  }else if(ph==="qa"||ph==="follow"){
-    txt("QUESTION "+(SH.q+1)+"/"+SH.qList.length+(ph==="follow"?" · FOLLOW-UP":""),W/2,HH+(C?12:24),C?9:11,accent(),"center","700");
-    const px=C?8:14, py=HH+(C?18:36), pw=W-2*px, phh=ch-(C?34:62), fs=C?13:17, lh=C?16:22;
-    ctx.fillStyle="#131b24"; rr(px,py,pw,phh,C?8:12); ctx.fill();
-    const lines=wrap(SH.qList[SH.q],pw-(C?16:28),fs), vis=Math.max(1,Math.floor((phh-(C?8:16))/lh));
-    lines.slice(0,vis).forEach((l,i)=>txt(l,px+pw-(C?8:14),py+(C?18:30)+i*lh,fs,FG,"right","500","rtl"));
-    txt(BOARD.touch?"PRESS SIDE BUTTON TO ANSWER":"PRESS A TO ANSWER",W/2,H-FH-(C?5:10),C?9:10,DIM,"center","600");
-  }else if(ph==="think"){
-    const n=Math.floor(now/250)%4, dy=C?HH+ch/2-6:116;
-    for(let i=0;i<3;i++){ ctx.fillStyle=i<n?accent():"#2a3541"; ctx.beginPath(); ctx.arc(W/2-20+i*20,dy,C?4:5,0,7); ctx.fill(); }
-    txt("SUMMARISING",W/2,dy+(C?20:30),C?11:14,FG,"center","700");
-    txt("POST /shift/finish",W/2,dy+(C?32:48),C?8:10,DIM,"center","600");
-  }else if(ph==="done"){
-    const cy=C?HH+30:84, r=C?16:30;
-    ctx.fillStyle="#46d17a"; ctx.beginPath(); ctx.arc(W/2,cy,r,0,7); ctx.fill();
-    ctx.strokeStyle="#0a0e13"; ctx.lineWidth=C?3:5; ctx.lineCap="round"; ctx.beginPath(); ctx.moveTo(W/2-r*0.45,cy+r*0.02); ctx.lineTo(W/2-r*0.1,cy+r*0.38); ctx.lineTo(W/2+r*0.5,cy-r*0.32); ctx.stroke();
-    txt("SUMMARY READY",W/2,cy+r+(C?15:28),C?12:17,FG,"center","700");
-    const ok=SH.result&&SH.result.delivered.docs;
-    txt("EMAIL ✓    DOCS "+(ok?"✓":"✗"),W/2,cy+r+(C?29:50),C?9:12,ok?"#46d17a":"#ffb02e","center","700");
-    txt(BOARD.touch?"A = READ ALOUD":"A = READ ALOUD",W/2,H-FH-(C?5:12),C?9:10,DIM,"center","600");
-  }
-  const f=shiftFoot(); footer(f[0],f[1],f[2]);
+function updateReadouts(now){
+  $("rLvl").textContent=S.level.toFixed(0); $("rFloor").textContent=S.floor.toFixed(0); $("rThr").textContent=S.thr.toFixed(0);
+  $("rBurst").textContent=S.bursts.length+"/2"; const r=S.refr-now; $("rRef").textContent=r>0?(r/1000).toFixed(1)+"s":"–";
 }
 
 /* ---------- loop ---------- */
-let last=performance.now(), uiAcc=0;
+let last=performance.now(), uiAcc=0, galAcc=0;
 function tick(now){
   const dt=Math.min(now-last,100); last=now;
-  sampleLevel(now,dt); updateTrigger(now,dt); updateIMU(now,dt); updateFSM(now); updateA2DP(now); updateShift(now,dt); updateStats(now,dt);
-  draw(now); uiAcc+=dt; if(uiAcc>66){ uiAcc=0; drawMeter(); updateReadouts(now); }
+  sampleLevel(now,dt); updateTrigger(now,dt); updateIMU(now,dt); updateFSM(now,dt); updateShift(now,dt); updateStats(now,dt);
+  drawDevice(now);
+  galAcc+=dt; if(galAcc>=66){ galAcc=0; drawGallery(now); }
+  uiAcc+=dt; if(uiAcc>66){ uiAcc=0; drawMeter(); updateReadouts(now); }
   requestAnimationFrame(tick);
 }
-try{ const t=JSON.parse(localStorage.getItem("dashie.trip")||"null"); if(t&&typeof t.time==="number") S.trip=t; }catch(e){}
-S.floor=+$("noise").value; S.level=S.floor;
 
 /* ---------- board switch ---------- */
 const HINTS={
-  core2:"A = הפעלה (בהגדרות: פריט הבא) · B = מסך הבא · C = פעולה לפי מסך (בהגדרות: שינוי ערך). אפשר גם ללחוץ על המסך, או על המקשים a / b / c.",
-  plus2:"A (הכפתור הקדמי) = הפעלה/אישור/ביטול תאונה, בהגדרות: שינוי ערך. לחיצה ארוכה על A = פעולת המסך (איפוס/מצב רוח). B (צד) = מסך הבא, בהגדרות: פריט הבא. PWR (צד) = כניסה ויציאה מהגדרות. מקשים: a / b / p (או c), x = לחיצה ארוכה על A. אין מסך מגע."
+  core2:"A = דבר/אישור (בהגדרות: שורה הבאה). החזקת A במסך משמרת = התחלת משמרת. במצב 'הכפתור שואל: ספר מתכונים': החזק A ושאל, שחרר לשליחה. B = מסך הבא. C = שנה/אפס. כפתור הצד: לחיצה = הערה, החזקה = סיום משמרת. אפשר גם ללחוץ על המסך. מקשים: a b c, n = צד (לחיצה), e = צד (החזקה), h = החזקת A.",
+  plus2:"A (קדמי) = דבר/אישור, בהגדרות: שנה ערך. בזמן משמרת A = הערה והחזקה = סיום; במסך משמרת החזקת A מתחילה משמרת. במצב ספר מתכונים: החזק A ושאל. B (צד) = מסך הבא, בהגדרות: שנה ערך, החזקת B = אפס. PWR = הגדרות / חזרה. אין מסך מגע. מקשים: a, x או h = החזקת A, b, v = החזקת B, p = PWR."
 };
 const NOTES={
-  core2:"מסך 2 אינץ' עם מגע, רמקול פנימי. הקושחה הנוכחית כתובה ללוח הזה.",
-  plus2:"מסך 1.14 אינץ' קטן וללא מגע, זמזם בלבד (אין רמקול), ‏2MB PSRAM. הדיבור יוצא לדיבורית הרכב דרך Bluetooth A2DP. הקושחה הנוכחית כתובה ל-Core2, ולכן הלוח הזה דורש התאמה."
+  core2:"מסך 2 אינץ' עם מגע, רמקול פנימי, מנוע רטט, כרטיס SD. תפקיד: מכשיר רכב (יש מסך 'מכשיר כיס').",
+  plus2:"מסך 1.14 אינץ' ללא מגע, זמזם בלבד (בלי רמקול ובלי מנוע רטט), 2MB PSRAM. תפקיד: מכשיר כיס. הדיבור יוצא רק לדיבורית הרכב ב-A2DP."
 };
-HINTS.core2+=" משמרת: כפתור הצד (n = קצר, h = ארוך) מקליט הערות ומתחיל/מסיים משמרת.";
-HINTS.plus2+=" משמרת: A (או n) = הערה, החזקת A (x או h) = סיום, החזקת PWR = התחלת משמרת (h).";
 function setBoard(id,silent){
   if(!BOARDS[id]) id="core2";
   BOARD=BOARDS[id]; applyBoardGeometry();
@@ -1375,21 +1968,27 @@ function setBoard(id,silent){
   dv.dataset.board=id; dv.setAttribute("aria-label",BOARD.name);
   $("touchBtns").hidden=plus; $("stickRow").hidden=!plus; $("pA").hidden=!plus; $("sideRow").hidden=plus;
   $("brand").textContent=BOARD.brand; $("btnHint").textContent=HINTS[id]; $("boardNote").textContent=NOTES[id];
-  document.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-checked",b.dataset.board===id?"true":"false"));
-  /* reset transient state that depends on the board */
-  if(SH.pocket) setPocket(false,performance.now());
-  S.a2dp="off"; S.crash=null; S.screen=0; S.setSel=0; S.prevScreen=0; $("pScreen").textContent="מסך: "+SCREENS[0];
-  setAudioPill();
+  document.querySelectorAll(".seg [data-board]").forEach(b=>b.setAttribute("aria-checked",b.dataset.board===id?"true":"false"));
+  S.a2dp="off"; S.crash=null; S.screen="FACE"; S.setSel=0; S.setFirst=0; S.btPicking=false; S.testRunning=false; S.testRes="";
+  if(S.st!=="IDLE") setSt("IDLE",performance.now());
+  S.lastActivity=performance.now(); setAudioPill(); updateShiftUI();
   if(!silent){ try{ localStorage.setItem("dashie.board",id); }catch(e){} log("לוח → "+BOARD.name+" ("+W+"×"+H+")","s"); log(BOARD.boot,"t"); }
 }
-document.querySelectorAll(".seg button").forEach(b=>b.addEventListener("click",()=>setBoard(b.dataset.board)));
-let savedBoard=null; try{ savedBoard=localStorage.getItem("dashie.board"); }catch(e){}
+document.querySelectorAll(".seg [data-board]").forEach(b=>b.addEventListener("click",()=>setBoard(b.dataset.board)));
+
+/* ---------- start ---------- */
+try{ const t=JSON.parse(localStorage.getItem("dashie.trip2")||"null"); if(t&&typeof t.secs==="number") S.trip=t; }catch(e){}
+S.floor=+$("noise").value; S.level=S.floor; S.lastActivity=performance.now();
+buildGallery();
+let savedBoard=null, savedChar=null; try{ savedBoard=localStorage.getItem("dashie.board"); savedChar=localStorage.getItem("dashie.char"); }catch(e){}
 setBoard(savedBoard&&BOARDS[savedBoard]?savedBoard:"core2",true);
+setChar(savedChar&&FACE_FN[savedChar]?savedChar:"bean",true);
 log(BOARD.boot,"s"); log("הפעלה: לחץ A, או לחץ פעמיים על 'אין מיקרופון, סמלץ'","t");
-$("pDrive").textContent="בנסיעה";
+$("pDrive").textContent="בנסיעה"; setAudioPill(); updateShiftUI();
 requestAnimationFrame(tick);
-window.__dashie={S,SH,shiftStart,shiftEnd,sideShort,sideLong,shiftPress,press,wake:()=>wake("test",performance.now()),impulse,setBoard};
+window.__dashie={S,SH,onAction,setBoard,setChar,startPtt,pttRelease,coreSideClick,coreSideHold,p2AClick,p2AHold,p2BClick,p2BHold,p2PClick,coreButton,impulse,startReadLast,shiftStartDev,drawChar,VARIANTS,MOODS,T};
 })();
+
 </script>
 </body>
 </html>
