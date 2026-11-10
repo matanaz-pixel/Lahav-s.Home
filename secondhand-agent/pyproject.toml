@@ -1,0 +1,19 @@
+[project]
+name = "secondhand-agent"
+version = "0.1.0"
+description = "סוכן שמוכר פריטי יד שנייה: מודעה, תמחור, פרסום ומו\"מ"
+requires-python = ">=3.11"
+dependencies = [
+  "anthropic>=0.40",
+  "python-telegram-bot>=21",
+  "pillow>=10",
+  "pydantic>=2",
+  "python-dotenv>=1",
+]
+[project.optional-dependencies]
+publish = ["playwright>=1.45"]
+dev = ["pytest>=8"]
+[tool.setuptools.packages.find]
+where = ["src"]
+[tool.pytest.ini_options]
+pythonpath = ["src"]
