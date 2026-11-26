@@ -7,14 +7,14 @@ from telegram.ext import Application, CallbackQueryHandler, CommandHandler, Cont
 
 from .config import Config
 from .db import DB
-from .llm import LLM
+from .llm import create_llm
 from .pipeline import process_photos
 
 ALBUM_WAIT_SECONDS = 4  # המתנה לאיסוף כל תמונות האלבום
 
 
 def build_app(cfg: Config) -> Application:
-    llm, db = LLM(cfg.anthropic_key, cfg.model), DB(cfg.data_dir / "agent.db")
+    llm, db = create_llm(cfg.provider, cfg.llm_key, cfg.model), DB(cfg.data_dir / "agent.db")
     app = Application.builder().token(cfg.telegram_token).build()
     owner = filters.User(user_id=cfg.owner_id)
     pending: dict[int, dict] = {}  # chat_id -> {photos, notes, task}
