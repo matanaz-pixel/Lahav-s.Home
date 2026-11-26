@@ -1,0 +1,16 @@
+Metadata-Version: 2.4
+Name: secondhand-agent
+Version: 0.1.0
+Summary: סוכן שמוכר פריטי יד שנייה: מודעה, תמחור, פרסום ומו"מ
+Requires-Python: >=3.11
+Requires-Dist: google-genai>=1.0
+Requires-Dist: python-telegram-bot>=21
+Requires-Dist: pillow>=10
+Requires-Dist: pydantic>=2
+Requires-Dist: python-dotenv>=1
+Provides-Extra: publish
+Requires-Dist: playwright>=1.45; extra == "publish"
+Provides-Extra: anthropic
+Requires-Dist: anthropic>=0.40; extra == "anthropic"
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"
